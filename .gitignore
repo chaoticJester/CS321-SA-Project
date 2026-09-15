@@ -28,3 +28,10 @@ build/
 .env.local
 .vite/
 .DS_Store
+
+# backend
+backend/node_modules/
+backend/dist/
+backend/.env
+backend/uploads/*
+!backend/uploads/.gitkeep
