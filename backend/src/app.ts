@@ -1,5 +1,6 @@
 import express, { Request, Response } from "express";
 import cors from "cors";
+import authRoutes from "./routes/auth.routes"
 
 const app = express();
 
@@ -7,13 +8,14 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
+app.use("/api/auth", authRoutes);
+
 // health check
 app.get("/health", (_req: Request, res: Response) => {
   res.json({ ok: true });
 });
 
 // mount routes (ค่อย uncomment ทีละตัวเมื่อไฟล์พร้อม)
-// app.use("/api/auth", authRoutes);
 // app.use("/api/employees", employeeRoutes);
 // app.use("/api/vendors", vendorRoutes);
 // app.use("/api/pr", prRoutes);
