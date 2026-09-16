@@ -1,8 +1,8 @@
-CREATE DATABASE IF NOT EXISTS pr_approval_system
+CREATE DATABASE IF NOT EXISTS pr_approval
     CHARACTER SET utf8mb4
     COLLATE utf8mb4_unicode_ci;
 
-USE pr_approval_system;
+USE pr_approval;
 
 CREATE TABLE approval_level (
     level_id        VARCHAR(20)     NOT NULL,

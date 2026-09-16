@@ -32,4 +32,4 @@ INSERT INTO approval_log (log_id, pr_id, approver_id, level_id, job_action, comm
 ('LOG0002', 'PR0001', 'E0017', 'LV2', 'Approve', NULL, TRUE, '2026-07-04 10:00:00', '2026-07-04 10:00:00'),
 ('LOG0003', 'PR0001', 'E0015', 'LV3', 'Approve', NULL, TRUE, '2026-07-04 14:00:00', '2026-07-04 14:00:00'),
 ('LOG0004', 'PR0001', 'E0010', 'LV4', 'Approve', NULL, TRUE, '2026-07-05 09:00:00', '2026-07-05 09:00:00'),
-('LOG0005', 'PR0001', 'E0005', 'LV5', 'Approve', NULL, TRUE, '2026-07);
+('LOG0005', 'PR0001', 'E0005', 'LV5', 'Approve', NULL, TRUE, '2026-07-05 15:00:00', '2026-07-05 15:00:00');
