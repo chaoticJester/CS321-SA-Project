@@ -5,7 +5,10 @@ info:
 
 http:
   method: GET
-  url: ""
+  url: "{{baseUrl}}/health"
+  headers:
+    - name: Authorization
+      value: Bearer {{token}}
   auth: inherit
 
 settings:
