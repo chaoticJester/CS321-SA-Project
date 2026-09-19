@@ -1,7 +1,7 @@
 import express, { Request, Response } from "express";
 import cors from "cors";
 import authRoutes from "./routes/auth.routes"
-import { authMiddleware } from "./middlewares/auth.middleware";
+import employeeRoutes from "./routes/employee.routes";
 
 const app = express();
 
@@ -16,8 +16,9 @@ app.get("/health", (_req: Request, res: Response) => {
   res.json({ ok: true });
 });
 
+app.use("/api/employees", employeeRoutes);
+
 // mount routes (ค่อย uncomment ทีละตัวเมื่อไฟล์พร้อม)
-// app.use("/api/employees", employeeRoutes);
 // app.use("/api/vendors", vendorRoutes);
 // app.use("/api/pr", prRoutes);
 // app.use("/api/pr", prApprovalRoutes); // ← ไฟล์คนที่ 2
