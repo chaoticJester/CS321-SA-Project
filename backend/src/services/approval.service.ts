@@ -2,7 +2,7 @@ import { RowDataPacket } from 'mysql2';
 import pool from '../config/db';
 import { ApprovalLevel, ApprovalLogRow } from '../types/approval';
 import crypto from 'crypto';
-import { insertApprovalLogs, findNextPendingLog } from '../models/prApprovalLog.model';
+import { insertApprovalLogs, findNextPendingLog, hasApprovalLogs } from '../models/prApprovalLog.model';
 
 interface ApprovalLevelRow extends RowDataPacket, ApprovalLevel {}
 
@@ -62,6 +62,11 @@ function generateLogId(): string {
 }
 
 export async function createApprovalLog(prId: string, chain: ApprovalLevel[]): Promise<void> {
+    const alreadyExists = await hasApprovalLogs(prId);
+    if (alreadyExists) {
+        throw new Error(`Approval logs already exist for PR ID ${prId}`);
+    }
+    
     const approversByLevel = await getApproversForChain(chain);
 
     const logs = chain.map(level => {

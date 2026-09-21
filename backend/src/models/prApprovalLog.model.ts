@@ -33,3 +33,11 @@ export async function findNextPendingLog(prId: string): Promise<ApprovalLogRow |
     );
     return rows[0] ?? null;
 }
+
+export async function hasApprovalLogs(prId: string): Promise<boolean> {
+  const [rows] = await pool.query<RowDataPacket[]>(
+    `SELECT 1 FROM approval_log WHERE pr_id = ? LIMIT 1`,
+    [prId]
+  );
+  return rows.length > 0;
+}
