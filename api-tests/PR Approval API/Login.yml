@@ -1,0 +1,28 @@
+info:
+  name: Login
+  type: http
+  seq: 1
+
+http:
+  method: POST
+  url: "{{baseUrl}}/api/auth/login"
+  body:
+    type: json
+    data: |-
+      {
+        "employee_id": "EMP001",
+        "passcode": "123456"
+      }
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: bru.setEnvVar("token", res.body.token);
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false
