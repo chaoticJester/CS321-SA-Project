@@ -1,34 +1,64 @@
-# React + TypeScript + Vite
+# SA Project — Final Prototype
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+React, TypeScript, and Vite implementation of the [Final Prototype page in Figma](https://www.figma.com/design/zD2Rs5mCWypWJG0htNpgn6/SA-Project-13?node-id=272-495).
 
-Currently, two official plugins are available:
+## Run
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+Use Node.js 24 or newer (the unit tests use Node's built-in TypeScript support).
 
-## React Compiler
-
-The React Compiler is enabled on this template. See [this documentation](https://react.dev/learn/react-compiler) for more information.
-
-Note: This will impact Vite dev & build performances.
-
-## Expanding the Oxlint configuration
-
-If you are developing a production application, we recommend enabling type-aware lint rules by installing `oxlint-tsgolint` and editing `.oxlintrc.json`:
-
-```json
-{
-  "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["react", "typescript", "oxc"],
-  "options": {
-    "typeAware": true
-  },
-  "rules": {
-    "react/rules-of-hooks": "error",
-    "react/only-export-components": ["warn", { "allowConstantExport": true }]
-  }
-}
+```sh
+cd frontend
+npm install
+npm run dev
 ```
 
-See the [Oxlint rules documentation](https://oxc.rs/docs/guide/usage/linter/rules) for the full list of rules and categories.
+Open the local URL printed by Vite. Sign in using either:
+
+- Employee ID: `EMP-104882`
+- Company email: `somchai.k@company.co.th`
+- Password for either method: `Demo@123`
+
+The **Demo access** disclosure on the login screen also shows these credentials. Any other credentials display the incorrect-password state. A successful sign-in displays the loading state before opening the PR form.
+
+## Implemented screens
+
+| Figma frame | Node | Application behavior |
+| --- | --- | --- |
+| Login - 1 | 277:2111 | Employee-ID sign-in |
+| Login - 2 | 277:2138 | Company-email sign-in |
+| Login - Wrong password | 277:2221 | Invalid-credential feedback |
+| Login - Submitting | 277:2246 | Loading state after successful demo sign-in |
+| Login - Forget password | 277:2267 | Reset request form with explicit demo result |
+| Create PR-1 | 277:1381 | Basic information and required-field validation |
+| Create PR-2 (Default) | 277:1515 | Empty item editor |
+| Create PR-2 (Add Item) | 277:1751 | Add/edit/remove rows, totals, English/Thai amount words, remarks |
+| Create PR-3 | 277:1635 | Drop or select JPG/PNG/PDF files, remove/download files, select purchaser |
+| Create PR-4 | 277:1157 | Budget control, summary, document preview, submission |
+
+The sign-up button opens a small request-access form because the design contains that action but no destination frame. Cancel has a confirmation dialog. The PDF action opens a printable document; use the browser's **Save as PDF** option.
+
+## Data and integration boundaries
+
+This is a functional **local frontend prototype**, not a production procurement system. The repository's backend folder remains empty.
+
+- Authentication uses fixed demo credentials; it does not establish a secure server session. Passwords are not persisted.
+- Reset/sign-up requests do not send email or create an account.
+- **Save Draft** stores the current form and actual attachment bytes in IndexedDB on the current browser/origin. Sign in again to restore it. Unsaved changes show the browser's leave-page warning.
+- **Submit** validates the form, stores a completed record locally with a generated PR reference, and clears the saved draft in the same transaction. It does not contact an approver. The success dialog explicitly explains this.
+- The budget is a demo balance of **130,000 THB**, matching the budget-control table. Both review panels use the same calculated balance; the contradictory static Figma examples (52 versus 57,000 THB) are replaced by the actual line-item total.
+- Available dropdown choices and requester details are demo fixtures. Only THB is supported; no currency conversion is performed.
+- Each attachment must be nonempty, JPG/PNG/PDF, and at most 5 MB. Browser storage quota may limit the total; failed writes retain the open form and show an error.
+- Server authentication, authorization, employee/vendor/budget APIs, file security scanning, approval routing, and email require a backend before production use.
+
+## Design assets and styling
+
+Reusable React components live in `src/components`. Shared validation/calculation/persistence functions live in `src/model.ts`. Styles use plain CSS and responsive layouts; there is no Tailwind dependency.
+
+Figma-exported icons are saved in `public/figma` so the app does not depend on expiring asset URLs. Bai Jamjuree, Noto Sans Thai, and Sarabun fonts are bundled locally through Fontsource. PR layouts reproduce the upright Figma screenshots instead of copying the source nodes' rotated absolute positioning.
+
+## Verify
+
+```sh
+npm run build
+npm run lint
+```
