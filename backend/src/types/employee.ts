@@ -13,3 +13,11 @@ export interface JwtPayload {
   sub: string; //subject = employee_id
   approval_level_id: string | null;
 }
+
+export interface PendingApprovalItem {
+  pr_id: string;
+  pr_no: string;
+  job_name: string | null;
+  requester_id: string;
+  created_at: Date;
+}
