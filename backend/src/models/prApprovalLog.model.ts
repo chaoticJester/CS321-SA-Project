@@ -1,6 +1,7 @@
 import { ResultSetHeader, RowDataPacket } from "mysql2";
 import pool from "../config/db";
 import { ApprovalLogRow } from "../types/approval";
+import {Queryable} from "../types/db";
 
 interface ApprovalLogDbRow extends RowDataPacket, ApprovalLogRow {}
 
@@ -11,7 +12,7 @@ export interface NewApprovalLogInput {
     level_id: string;
 }
 
-export async function insertApprovalLogs(logs: NewApprovalLogInput[]): Promise<void> {
+export async function insertApprovalLogs(logs: NewApprovalLogInput[], db: Queryable = pool): Promise<void> {
     if (logs.length === 0) {
         return;
     }
@@ -24,7 +25,7 @@ export async function insertApprovalLogs(logs: NewApprovalLogInput[]): Promise<v
         'pending',
     ]);
 
-    await pool.query('INSERT INTO approval_log (log_id, pr_id, approver_id, level_id, job_action) VALUES ?', [values]);
+    await db.query('INSERT INTO approval_log (log_id, pr_id, approver_id, level_id, job_action) VALUES ?', [values]);
 }
 
 export async function findNextPendingLog(prId: string): Promise<ApprovalLogRow | null> {
@@ -34,8 +35,8 @@ export async function findNextPendingLog(prId: string): Promise<ApprovalLogRow |
     return rows[0] ?? null;
 }
 
-export async function hasApprovalLogs(prId: string): Promise<boolean> {
-  const [rows] = await pool.query<RowDataPacket[]>(
+export async function hasApprovalLogs(prId: string, db: Queryable = pool): Promise<boolean> {
+  const [rows] = await db.query<RowDataPacket[]>(
     `SELECT 1 FROM approval_log WHERE pr_id = ? LIMIT 1`,
     [prId]
   );
