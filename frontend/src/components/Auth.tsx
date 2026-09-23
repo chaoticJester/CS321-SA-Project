@@ -23,7 +23,7 @@ export function Auth({ onSignIn }: { onSignIn: () => void }) {
   const special = mode === 'forgot' || mode === 'signup'
   return <main className="auth-layout">
     <aside className="auth-brand">
-      <div className="company"><div className="logo-plate"><img src={`${import.meta.env.BASE_URL}figma/logo-a.svg`} alt="" /><img src={`${import.meta.env.BASE_URL}figma/logo-b.svg`} alt="" /><span>LOGO</span></div><div>COMPANY LIMITED<br /><span lang="th">ฝ่ายจัดซื้อ</span> / PROCUREMENT</div></div>
+      <div className="company auth-wordmark"><span className="auth-logo-mark"><img src={`${import.meta.env.BASE_URL}figma/requester-logo-top.svg`} alt="" /><img src={`${import.meta.env.BASE_URL}figma/requester-logo-bottom.svg`} alt="" /></span><strong>SA‑PR</strong></div>
       <div className="brand-title"><h1 lang="th">ระบบอนุมัติ<br />คำสั่งซื้อ</h1><p>PURCHASE REQUISITION<br />APPROVAL SYSTEM</p></div>
     </aside>
     <section className="auth-right" aria-label="Account access">

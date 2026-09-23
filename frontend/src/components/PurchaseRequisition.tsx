@@ -10,14 +10,14 @@ import { Modal } from './Modal'
 import { Icon } from './Icon'
 
 const steps = [['Basic Info', 'ข้อมูลทั่วไป'], ['Items', 'รายการสินค้า'], ['Attachment', 'เอกสารแนบ'], ['Review & Submit', 'ตรวจสอบและส่ง']]
-export function PurchaseRequisition({ onSignOut }: { onSignOut: () => void }) {
+export function PurchaseRequisition({ onClose, onSignOut }: { onClose: () => void; onSignOut: () => void }) {
   const [value, setValue] = useState<Requisition>(newRequisition)
   const [ready, setReady] = useState(false)
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
   const [busy, setBusy] = useState(false)
   const [dirty, setDirty] = useState(false)
-  const [modal, setModal] = useState<'cancel' | 'pdf' | 'success' | null>(null)
+  const [modal, setModal] = useState<'cancel' | 'signout' | 'pdf' | 'success' | null>(null)
   useEffect(() => {
     let mounted = true
     readDraft().then(draft => { if (mounted && draft) { setValue(draft); setNotice('Saved draft restored / โหลดฉบับร่างแล้ว') } }).catch(() => { if (mounted) setNotice('Browser storage is unavailable. You can complete the form, but draft saving may fail.') }).finally(() => { if (mounted) setReady(true) })
@@ -73,10 +73,10 @@ export function PurchaseRequisition({ onSignOut }: { onSignOut: () => void }) {
       {value.step < 4 && <div className="step-actions">{value.step > 1 && <button type="button" className="button secondary" onClick={() => move(value.step - 1)}>Back</button>}<button className="button primary" type="submit">Next</button></div>}
       </fieldset>
     </form>
-    <footer className="prototype-footer">Local prototype · Drafts are stored on this device.<button type="button" className="text-button" onClick={() => dirty ? setModal('cancel') : onSignOut()}>Sign out</button></footer>
+    <footer className="prototype-footer">Local prototype · Drafts are stored on this device.<button type="button" className="text-button" onClick={() => dirty ? setModal('signout') : onSignOut()}>Sign out</button></footer>
   </main>
   <div className="print-only"><PrintableRequisition value={value} /></div>
-  {modal === 'cancel' && <Modal title="Leave this requisition?" onClose={() => setModal(null)}><p>Unsaved changes will be discarded. Your last saved draft will still be available when you sign in again.</p><div className="modal-actions"><button className="button secondary" onClick={() => setModal(null)}>Keep editing</button><button className="button cancel" onClick={onSignOut}>Discard changes &amp; leave</button></div></Modal>}
+  {(modal === 'cancel' || modal === 'signout') && <Modal title={modal === 'cancel' ? 'Close this requisition?' : 'Sign out?'} onClose={() => setModal(null)}><p>Unsaved changes will be discarded. Your last saved draft will still be available.</p><div className="modal-actions"><button className="button secondary" onClick={() => setModal(null)}>Keep editing</button><button className="button cancel" onClick={modal === 'cancel' ? onClose : onSignOut}>{modal === 'cancel' ? 'Discard changes & go to home' : 'Discard changes & sign out'}</button></div></Modal>}
   {modal === 'pdf' && <Modal title="Purchase requisition preview" onClose={() => setModal(null)} wide><p className="muted">Choose Print, then “Save as PDF” in your browser.</p><button className="button primary" onClick={() => window.print()}>Print / Save as PDF</button><PrintableRequisition value={value} /></Modal>}
   {modal === 'success' && <Modal title="บันทึกคำขอเรียบร้อย / Request saved" onClose={startNew}><p className="success-reference">{value.reference}</p><p>Your completed request is saved on this device. This local prototype does not send it to a manager or approval service.</p><div className="modal-actions"><button className="button secondary" onClick={() => window.print()}>Print / Save as PDF</button><button className="button primary" onClick={startNew}>Create another PR</button></div></Modal>}
   </>

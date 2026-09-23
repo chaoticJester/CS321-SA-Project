@@ -2,9 +2,10 @@
 .auth-layout { min-height: 100svh; display: grid; grid-template-columns: 38.82% 1fr; color: var(--auth-ink); background: #d9d6cd; }
 .auth-brand { padding: 40px 38px; background: var(--surface); display: flex; flex-direction: column; justify-content: space-between; min-height: 100svh; }
 .company { display: flex; align-items: center; gap: 14px; color: #73909a; font-size: 14px; font-weight: 500; letter-spacing: 1.96px; line-height: 1.2; }
-.logo-plate { position: relative; flex: 0 0 44px; height: 44px; border: 1px solid #cbd6d8; border-radius: 14px; overflow: hidden; }
-.logo-plate img { position: absolute; inset: -1px; width: 52px; height: 52px; }
-.logo-plate span { position: absolute; top: 19px; left: 10px; padding: 2px 3px; background: var(--surface); font: 8px monospace; letter-spacing: .8px; }
+.auth-wordmark { gap: 10px; color: #222a2d; letter-spacing: -.2px; }
+.auth-wordmark strong { font-size: 20px; line-height: 32px; }
+.auth-logo-mark { display: flex; width: 20px; flex-direction: column; gap: 4px; }
+.auth-logo-mark img { display: block; width: 20px; height: 8px; }
 .brand-title h1 { font: 600 42px/1.26 'Sarabun', sans-serif; letter-spacing: -.63px; margin-bottom: 12px; }
 .brand-title p { color: #3c5488; font-size: 20px; line-height: 24px; letter-spacing: 2px; }
 .auth-right { position: relative; display: flex; justify-content: center; align-items: center; padding: 70px 40px; }
@@ -236,7 +237,7 @@
   .print-document dl { grid-template-columns: 1fr; }
   .modal { padding: 20px; }
 }
-@media (max-width: 450px) { .basic-grid { grid-template-columns: 1fr; } .company { font-size: 9px; } .auth-brand { padding: 20px 16px; } .brand-title h1 { font-size: 19px; } .logo-plate { flex-basis: 36px; height: 36px; } .auth-title { font-size: 24px; } .auth-card { padding-inline: 20px; } }
+@media (max-width: 450px) { .basic-grid { grid-template-columns: 1fr; } .auth-brand { padding: 20px 16px; } .brand-title h1 { font-size: 19px; } .auth-title { font-size: 24px; } .auth-card { padding-inline: 20px; } }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; scroll-behavior: auto !important; transition: none !important; } }
 @media print {
   @page { size: A4; margin: 15mm; }
