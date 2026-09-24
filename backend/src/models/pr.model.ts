@@ -4,7 +4,10 @@ import type { CreatePrInput } from "../types/pr.js";
 import pool from "../config/db.js";
 import type { PrRow, PrItemRow, PrWithItems } from "../types/pr.js";
 
-type PrDbRow = PrRow & RowDataPacket;
+type PrDbRow = Omit<PrRow, "require_date"> &
+  RowDataPacket & {
+    require_date: string;
+};
 type PrItemDbRow = PrItemRow & RowDataPacket;
 interface LatestPrNumberRow extends RowDataPacket {
     pr_no: string;
@@ -80,7 +83,12 @@ export async function findPrById(
   prId: string,
 ): Promise<PrWithItems | null> {
   const [prs] = await pool.query<PrDbRow[]>(
-    "SELECT * FROM pr WHERE pr_id = ?",
+    `SELECT
+      pr_id, pr_no, requester_id,
+      DATE_FORMAT(require_date, '%Y-%m-%dT%H:%i:%sZ') AS require_date,
+      job_name, purpose, asset_type, vendor_name, status, created_at
+    FROM pr
+    WHERE pr_id = ?`,
     [prId],
   );
 
@@ -101,7 +109,25 @@ export async function findPrById(
 
   return {
     ...pr,
+    require_date: new Date(pr.require_date),
     items,
     total_amount: totalAmount,
   };
+}
+
+export async function insertAttachment(
+  prId: string,
+  fileType: string,
+  filePath: string,
+): Promise<string> {
+  const attachmentId = `AT${randomBytes(8).toString("hex")}`;
+
+  await pool.execute<ResultSetHeader>(
+    `INSERT INTO attachment
+       (attachment_id, pr_id, file_type, file_path)
+     VALUES (?, ?, ?, ?)`,
+    [attachmentId, prId, fileType, filePath],
+  );
+  
+  return attachmentId;
 }
