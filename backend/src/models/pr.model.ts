@@ -1,7 +1,11 @@
 import type { ResultSetHeader, PoolConnection, RowDataPacket } from "mysql2/promise";
 import { randomBytes } from "node:crypto";
 import type { CreatePrInput } from "../types/pr.js";
+import pool from "../config/db.js";
+import type { PrRow, PrItemRow, PrWithItems } from "../types/pr.js";
 
+type PrDbRow = PrRow & RowDataPacket;
+type PrItemDbRow = PrItemRow & RowDataPacket;
 interface LatestPrNumberRow extends RowDataPacket {
     pr_no: string;
 }
@@ -70,4 +74,34 @@ export async function insertPrAndItems(
     }
 
     return prId;
+}
+
+export async function findPrById(
+  prId: string,
+): Promise<PrWithItems | null> {
+  const [prs] = await pool.query<PrDbRow[]>(
+    "SELECT * FROM pr WHERE pr_id = ?",
+    [prId],
+  );
+
+  const pr = prs[0];
+  if(!pr) {
+    return null;
+  }
+
+  const [items] = await pool.query<PrItemDbRow[]>(
+    "SELECT * FROM pr_item WHERE pr_id = ? ORDER BY item_id",
+    [prId],
+  );
+
+  const totalAmount = items.reduce(
+    (sum, item) => sum + item.qty * Number(item.unit_price),
+    0
+  );
+
+  return {
+    ...pr,
+    items,
+    total_amount: totalAmount,
+  };
 }
