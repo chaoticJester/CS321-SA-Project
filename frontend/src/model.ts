@@ -63,6 +63,16 @@ export async function readDraft(): Promise<Requisition | undefined> {
     request.onerror = () => reject(request.error)
   }) } finally { db.close() }
 }
+export async function readSubmittedRequisitions(): Promise<Requisition[]> {
+  const db = await database()
+  try { return await new Promise((resolve, reject) => {
+    const request = db.transaction('requisitions').objectStore('requisitions').getAll()
+    request.onsuccess = () => resolve((request.result as Requisition[])
+      .filter(value => Boolean(value.reference))
+      .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt)))
+    request.onerror = () => reject(request.error)
+  }) } finally { db.close() }
+}
 export async function persistRequisition(value: Requisition, submit = false) {
   const db = await database()
   try { await new Promise<void>((resolve, reject) => {

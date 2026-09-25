@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
 
 type Mode = 'id' | 'email' | 'forgot' | 'signup'
-export function Auth({ onSignIn }: { onSignIn: () => void }) {
+export function Auth({ onSignIn }: { onSignIn: (role: 'requester' | 'approver') => void }) {
   const [mode, setMode] = useState<Mode>('id')
   const [identity, setIdentity] = useState('')
   const [password, setPassword] = useState('')
@@ -16,9 +16,12 @@ export function Auth({ onSignIn }: { onSignIn: () => void }) {
     event.preventDefault()
     if (mode === 'forgot') { setMessage('Demo: reset request received. No email is sent; use the demo credentials shown below.'); return }
     if (mode === 'signup') { setMessage('Demo: account request received. Use the demo credentials to explore the prototype.'); return }
-    if (!['EMP-104882', 'somchai.k@company.co.th'].includes(identity.trim()) || password !== 'Demo@123') { setAttempts(n => n + 1); return }
+    const login = identity.trim().toLocaleLowerCase()
+    const requester = ['emp-104882', 'somchai.k@company.co.th'].includes(login)
+    const approver = ['app-204188', 'chatchai.p@company.co.th'].includes(login)
+    if ((!requester && !approver) || password !== 'Demo@123') { setAttempts(n => n + 1); return }
     setAttempts(0); setLoading(true)
-    timer.current = setTimeout(onSignIn, 1600)
+    timer.current = setTimeout(() => onSignIn(approver ? 'approver' : 'requester'), 1600)
   }
   const special = mode === 'forgot' || mode === 'signup'
   return <main className="auth-layout">
@@ -39,12 +42,12 @@ export function Auth({ onSignIn }: { onSignIn: () => void }) {
           {!special && !attempts && !loading && <button className="text-button forgot" type="button" onClick={() => changeMode('forgot')}>ลืมรหัสผ่าน? / Forgot</button>}
           <button className="button primary auth-submit" type="submit" disabled={loading}>{loading ? <><img className="spinner" src={`${import.meta.env.BASE_URL}figma/spinner.svg`} alt="" />กำลังตรวจสอบสิทธิ์…</> : mode === 'forgot' ? 'ส่งลิงก์ตั้งรหัสผ่าน / SEND LINK' : mode === 'signup' ? 'ขอใช้งาน / REQUEST ACCESS' : attempts ? 'ลองอีกครั้ง / TRY AGAIN' : 'เข้าสู่ระบบ / SIGN IN'}</button>
         </form>
-        {loading && <div className="login-log" role="status"><p>✓ CREDENTIALS ACCEPTED</p><p>✓ ROLE — REQUESTER / ผู้ขอซื้อ</p><p>… LOADING PURCHASE REQUISITION</p></div>}
+        {loading && <div className="login-log" role="status"><p>✓ CREDENTIALS ACCEPTED</p><p>✓ ROLE DETECTED / ตรวจสอบสิทธิ์แล้ว</p><p>… LOADING PURCHASE REQUISITION</p></div>}
         {message && <p className="auth-message" role="status">{message}</p>}
         {special && <button className="text-button return-login" onClick={() => changeMode('id')}>ย้อนกลับไปหน้าเข้าสู่ระบบ</button>}
         {!special && !attempts && !loading && <><div className="no-account"><span>ยังไม่มีบัญชี?</span></div><button className="button signup" onClick={() => changeMode('signup')}>ลงทะเบียนขอใช้งาน / SIGN UP</button></>}
       </div>
-      <details className="demo-help"><summary>Demo access</summary><p>Employee ID: <strong>EMP-104882</strong><br />Email: <strong>somchai.k@company.co.th</strong><br />Password: <strong>Demo@123</strong></p><p>Local prototype. No real authentication or email delivery.</p></details>
+      <details className="demo-help"><summary>Demo access</summary><p>Requester: <strong>EMP-104882</strong> / somchai.k@company.co.th<br />Approver: <strong>APP-204188</strong> / chatchai.p@company.co.th<br />Password: <strong>Demo@123</strong></p><p>Local prototype. No real authentication or email delivery.</p></details>
     </section>
   </main>
 }

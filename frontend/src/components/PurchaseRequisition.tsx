@@ -10,7 +10,7 @@ import { Modal } from './Modal'
 import { Icon } from './Icon'
 
 const steps = [['Basic Info', 'ข้อมูลทั่วไป'], ['Items', 'รายการสินค้า'], ['Attachment', 'เอกสารแนบ'], ['Review & Submit', 'ตรวจสอบและส่ง']]
-export function PurchaseRequisition({ onClose, onSignOut }: { onClose: () => void; onSignOut: () => void }) {
+export function PurchaseRequisition({ onClose, onSignOut, onSubmitted, onViewRequests }: { onClose: () => void; onSignOut: () => void; onSubmitted: (value: Requisition) => void; onViewRequests: () => void }) {
   const [value, setValue] = useState<Requisition>(newRequisition)
   const [ready, setReady] = useState(false)
   const [error, setError] = useState('')
@@ -53,7 +53,7 @@ export function PurchaseRequisition({ onClose, onSignOut }: { onClose: () => voi
     if (grandTotal(value.items) > BUDGET) { setError('This request exceeds the available budget. Reduce the order amount before submitting.'); return }
     setBusy(true); setError('')
     const submitted = { ...value, items: activeItems(value.items), reference: `PR-${new Date().getFullYear()}-${crypto.randomUUID().slice(0, 8).toUpperCase()}` }
-    try { await persistRequisition(submitted, true); setValue(submitted); setDirty(false); setModal('success') }
+    try { await persistRequisition(submitted, true); setValue(submitted); setDirty(false); onSubmitted(submitted); setModal('success') }
     catch { setError('Could not save the submission. Your request has not been submitted; please try again.') }
     finally { setBusy(false) }
   }
@@ -78,6 +78,6 @@ export function PurchaseRequisition({ onClose, onSignOut }: { onClose: () => voi
   <div className="print-only"><PrintableRequisition value={value} /></div>
   {(modal === 'cancel' || modal === 'signout') && <Modal title={modal === 'cancel' ? 'Close this requisition?' : 'Sign out?'} onClose={() => setModal(null)}><p>Unsaved changes will be discarded. Your last saved draft will still be available.</p><div className="modal-actions"><button className="button secondary" onClick={() => setModal(null)}>Keep editing</button><button className="button cancel" onClick={modal === 'cancel' ? onClose : onSignOut}>{modal === 'cancel' ? 'Discard changes & go to home' : 'Discard changes & sign out'}</button></div></Modal>}
   {modal === 'pdf' && <Modal title="Purchase requisition preview" onClose={() => setModal(null)} wide><p className="muted">Choose Print, then “Save as PDF” in your browser.</p><button className="button primary" onClick={() => window.print()}>Print / Save as PDF</button><PrintableRequisition value={value} /></Modal>}
-  {modal === 'success' && <Modal title="บันทึกคำขอเรียบร้อย / Request saved" onClose={startNew}><p className="success-reference">{value.reference}</p><p>Your completed request is saved on this device. This local prototype does not send it to a manager or approval service.</p><div className="modal-actions"><button className="button secondary" onClick={() => window.print()}>Print / Save as PDF</button><button className="button primary" onClick={startNew}>Create another PR</button></div></Modal>}
+  {modal === 'success' && <Modal title="ส่งคำขอเรียบร้อย / Request submitted" onClose={onViewRequests}><p className="success-reference">{value.reference}</p><p>คำขอนี้ถูกบันทึกแล้วและพร้อมดูในคำขอของฉัน / Your request is now available in My PR.</p><div className="modal-actions"><button className="button secondary" onClick={() => window.print()}>Print / Save as PDF</button><button className="button secondary" onClick={startNew}>Create another PR</button><button className="button primary" onClick={onViewRequests}>Go to My PR</button></div></Modal>}
   </>
 }

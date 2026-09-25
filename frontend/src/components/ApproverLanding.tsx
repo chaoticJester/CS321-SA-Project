@@ -52,7 +52,7 @@ export function ApproverLanding({ onSignOut }: { onSignOut: () => void }) {
     document.getElementById('latest-requests')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
   }
 
-  return <div className="min-h-svh bg-white text-[#222a2d] [font-family:'Noto_Sans_Thai','Bai_Jamjuree',sans-serif]">
+  return <div className="min-h-svh bg-white text-[#222a2d] [font-family:'Noto_Sans_Thai','Bai_Jamjuree',sans-serif]" data-node-id="367:2835">
     <header className="h-[84px] bg-[#f7f6f1] text-[#31456c] max-[760px]:h-auto">
       <div className="relative mx-auto flex h-[84px] w-[min(1216px,calc(100%_-_48px))] items-center max-[760px]:h-auto max-[760px]:min-h-[76px] max-[760px]:w-[calc(100%_-_32px)] max-[760px]:flex-wrap max-[760px]:gap-3 max-[760px]:py-4">
         <a className="flex items-center gap-[10px] text-[#222a2d] no-underline" href="#approver-top" aria-label="SA-PR dashboard">
