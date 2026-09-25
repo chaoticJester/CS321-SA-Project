@@ -1,0 +1,27 @@
+info:
+  name: Upload PR - fail
+  type: http
+  seq: 9
+
+http:
+  method: POST
+  url: "{{baseUrl}}/api/pr/NOTEXIST/attachments"
+  headers:
+    - name: Authorization
+      value: Bearer {{token}}
+  body:
+    type: multipart-form
+    data:
+      - name: file
+        type: file
+        value:
+          - E:\University\EngGame\Journal\J10-10-09-26.pdf
+        contentType: application/pdf
+  auth: inherit
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

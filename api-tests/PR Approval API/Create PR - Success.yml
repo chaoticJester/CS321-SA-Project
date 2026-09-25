@@ -1,0 +1,39 @@
+info:
+  name: Create PR - Success
+  type: http
+  seq: 7
+
+http:
+  method: POST
+  url: "{{baseUrl}}/api/pr"
+  headers:
+    - name: Authorization
+      value: Bearer {{token}}
+    - name: Content-Type
+      value: application/json
+  body:
+    type: json
+    data: |-
+      {
+        "require_date": "2026-10-30T00:00:00Z",
+        "job_name": "Purchase test monitor",
+        "purpose": "Test PR creation",
+        "asset_type": "IT Equipment",
+        "vendor_name": "Test Vendor",
+        "items": [
+          {
+            "description": "Monitor",
+            "qty": 2,
+            "unit": "เครื่อง",
+            "unit_price": 2500
+          }
+        ]
+      }
+  auth: inherit
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false
