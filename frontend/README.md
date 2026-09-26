@@ -29,17 +29,23 @@ The **Demo access** disclosure on the login screen also shows these credentials.
 | Login - Wrong password | 277:2221 | Invalid-credential feedback |
 | Login - Submitting | 277:2246 | Loading state after successful demo sign-in |
 | Login - Forget password | 277:2267 | Reset request form with explicit demo result |
-| Create PR-1 | 277:1381 | Basic information and required-field validation |
-| Create PR-2 (Default) | 277:1515 | Empty item editor |
-| Create PR-2 (Add Item) | 277:1751 | Add/edit/remove rows, totals, English/Thai amount words, remarks |
-| Create PR-3 | 277:1635 | Drop or select JPG/PNG/PDF files, remove/download files, select purchaser |
-| Create PR-4 | 277:1157 | Budget control, summary, document preview, submission |
+| Landing page - Requester | 419:1665 | Requester home, examples, search, and create action |
+| Create PR-1 | 384:6213 | Basic information and required-field validation |
+| Create PR-2 (Default) | 384:6385 | Empty item editor |
+| Create PR-2 (Add Item) | 384:6554 | Live quantity × unit-price totals, add/edit/remove rows, amount words, remarks |
+| Create PR-3 | 384:7471 | Drop or select JPG/PNG/PDF files, remove/download files, select purchaser |
+| Create PR-4 | 384:6925 | Budget control, summary, document preview, submission |
+| PR - Submit State | 418:1282 | Submission confirmation and next approver |
+| My Requests | 423:1641 | Active/all request filters and locally submitted requests |
+| PR History | 426:2575 | Request history table |
+| View PR Detail | 442:3176 | Request, item-total, attachment, and approval detail |
+| Landing page - Approver | 367:2835 | Approval queue and dashboard summary |
 
 The sign-up button opens a small request-access form because the design contains that action but no destination frame. Cancel has a confirmation dialog. The PDF action opens a printable document; use the browser's **Save as PDF** option.
 
 ## Data and integration boundaries
 
-This is a functional **local frontend prototype**, not a production procurement system. The repository's backend folder remains empty.
+This is a functional **local frontend prototype**, not a production procurement system. The frontend demo flow is not yet connected to the repository's backend services.
 
 - Authentication uses fixed demo credentials; it does not establish a secure server session. Passwords are not persisted.
 - Reset/sign-up requests do not send email or create an account.
@@ -52,7 +58,7 @@ This is a functional **local frontend prototype**, not a production procurement 
 
 ## Design assets and styling
 
-Reusable React components live in `src/components`. Shared validation/calculation/persistence functions live in `src/model.ts`. Styles use plain CSS and responsive layouts; there is no Tailwind dependency.
+Reusable React components live in `src/components`. Shared validation/calculation/persistence functions live in `src/model.ts`. Styling combines shared CSS with Tailwind utility classes and responsive layouts.
 
 Figma-exported icons are saved in `public/figma` so the app does not depend on expiring asset URLs. Bai Jamjuree, Noto Sans Thai, and Sarabun fonts are bundled locally through Fontsource. PR layouts reproduce the upright Figma screenshots instead of copying the source nodes' rotated absolute positioning.
 

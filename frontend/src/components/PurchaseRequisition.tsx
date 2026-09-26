@@ -8,8 +8,10 @@ import { Attachments } from './Attachments'
 import { PrintableRequisition, Review } from './Review'
 import { Modal } from './Modal'
 import { Icon } from './Icon'
+import { RequesterHeader } from './RequesterHeader'
 
 const steps = [['Basic Info', 'ข้อมูลทั่วไป'], ['Items', 'รายการสินค้า'], ['Attachment', 'เอกสารแนบ'], ['Review & Submit', 'ตรวจสอบและส่ง']]
+const stepNodeIds = ['384:6213', '384:6385', '384:7471', '384:6925']
 export function PurchaseRequisition({ onClose, onSignOut, onSubmitted, onViewRequests }: { onClose: () => void; onSignOut: () => void; onSubmitted: (value: Requisition) => void; onViewRequests: () => void }) {
   const [value, setValue] = useState<Requisition>(newRequisition)
   const [ready, setReady] = useState(false)
@@ -59,7 +61,7 @@ export function PurchaseRequisition({ onClose, onSignOut, onSubmitted, onViewReq
   }
   function startNew() { setValue(newRequisition()); setModal(null); setNotice(''); setDirty(false) }
   if (!ready) return <main className="loading-page" role="status">Loading your requisition…</main>
-  return <><main className="pr-page"><header className="pr-header"><div className="pr-heading"><div><h1>Create Purchase Requisition (PR)</h1><p>สร้างใบขอสั่งซื้อ (PR)</p></div><div className="header-actions"><button className="button cancel" type="button" disabled={busy} onClick={() => setModal('cancel')}>Cancel</button><button className="button save" type="button" disabled={busy} onClick={save}><Icon name="save" />{busy ? 'Saving…' : 'Save Draft'}</button></div></div>
+  return <><div className="min-h-svh bg-white"><RequesterHeader onHome={onClose} onMyRequests={onViewRequests} onSignOut={() => dirty ? setModal('signout') : onSignOut()} /><main className="pr-page" data-node-id={stepNodeIds[value.step - 1]}><header className="pr-header"><div className="pr-heading"><div><h1>Create Purchase Requisition (PR)</h1><p>สร้างใบขอสั่งซื้อ (PR)</p></div><div className="header-actions"><button className="button cancel" type="button" disabled={busy} onClick={() => setModal('cancel')}>Cancel</button><button className="button save" type="button" disabled={busy} onClick={save}><Icon name="save" />{busy ? 'Saving…' : 'Save Draft'}</button></div></div>
     <dl className="requester-meta"><div><dt>Name/ชื่อ :</dt><dd>Worawut Jintasri</dd></div><div><dt>PR No./เลขที่ :</dt><dd>{value.reference || '—'}</dd></div><div><dt>Site/สาขา :</dt><dd>Head Office</dd></div><div><dt>Position/ตำแหน่ง :</dt><dd>Requester</dd></div><div><dt>PR Date/วันที่ :</dt><dd>{new Date(value.createdAt).toLocaleDateString('en-GB')}</dd></div><div><dt>Section/แผนก :</dt><dd>Technology Development</dd></div></dl>
   </header><nav aria-label="Purchase requisition steps"><ol className="stepper">{steps.map(([en, th], index) => <li key={en} className={index + 1 === value.step ? 'current' : ''}><button type="button" disabled={index + 1 > value.step || busy} aria-current={index + 1 === value.step ? 'step' : undefined} onClick={() => move(index + 1)}><span className="step-number">{index + 1}</span><span>{en}<small>{th}</small></span></button></li>)}</ol></nav>
     {notice && <div className="notice" role="status">{notice}<button type="button" className="text-button" aria-label="Dismiss notification" onClick={() => setNotice('')}>Dismiss</button></div>}
@@ -73,8 +75,7 @@ export function PurchaseRequisition({ onClose, onSignOut, onSubmitted, onViewReq
       {value.step < 4 && <div className="step-actions">{value.step > 1 && <button type="button" className="button secondary" onClick={() => move(value.step - 1)}>Back</button>}<button className="button primary" type="submit">Next</button></div>}
       </fieldset>
     </form>
-    <footer className="prototype-footer">Local prototype · Drafts are stored on this device.<button type="button" className="text-button" onClick={() => dirty ? setModal('signout') : onSignOut()}>Sign out</button></footer>
-  </main>
+  </main></div>
   <div className="print-only"><PrintableRequisition value={value} /></div>
   {(modal === 'cancel' || modal === 'signout') && <Modal title={modal === 'cancel' ? 'Close this requisition?' : 'Sign out?'} onClose={() => setModal(null)}><p>Unsaved changes will be discarded. Your last saved draft will still be available.</p><div className="modal-actions"><button className="button secondary" onClick={() => setModal(null)}>Keep editing</button><button className="button cancel" onClick={modal === 'cancel' ? onClose : onSignOut}>{modal === 'cancel' ? 'Discard changes & go to home' : 'Discard changes & sign out'}</button></div></Modal>}
   {modal === 'pdf' && <Modal title="Purchase requisition preview" onClose={() => setModal(null)} wide><p className="muted">Choose Print, then “Save as PDF” in your browser.</p><button className="button primary" onClick={() => window.print()}>Print / Save as PDF</button><PrintableRequisition value={value} /></Modal>}

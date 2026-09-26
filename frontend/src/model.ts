@@ -21,8 +21,14 @@ export function newRequisition(): Requisition {
 }
 export const activeItems = (items: Item[]) => items.filter(item => Object.entries(item).some(([key, value]) => key !== 'id' && value.trim()))
 export const money = (value: number) => value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+export function numericValue(value: string) {
+  const normalized = value.trim().replaceAll(',', '')
+  if (!normalized) return 0
+  const parsed = Number(normalized)
+  return Number.isFinite(parsed) ? parsed : Number.NaN
+}
 export function itemTotal(item: Item) {
-  const quantity = Number(item.quantity), price = Number(item.price)
+  const quantity = numericValue(item.quantity), price = numericValue(item.price)
   if (!Number.isFinite(quantity) || !Number.isFinite(price) || quantity < 0 || price < 0) return 0
   return Math.round(quantity * price * 100) / 100
 }
@@ -31,8 +37,8 @@ export function itemError(item: Item) {
   if (!item.name.trim()) return 'Enter an item name / กรุณาระบุชื่อสินค้า'
   if (!item.budgetCode.trim()) return 'Enter a budget code / กรุณาระบุงบประมาณเลขที่'
   if (!item.unit.trim()) return 'Enter a unit / กรุณาระบุหน่วย'
-  if (!item.quantity || !Number.isFinite(Number(item.quantity)) || Number(item.quantity) <= 0) return 'Quantity must be greater than zero.'
-  if (!item.price || !Number.isFinite(Number(item.price)) || Number(item.price) < 0) return 'Enter a valid, non-negative unit price.'
+  if (!item.quantity || !Number.isFinite(numericValue(item.quantity)) || numericValue(item.quantity) <= 0) return 'Quantity must be greater than zero.'
+  if (!item.price || !Number.isFinite(numericValue(item.price)) || numericValue(item.price) < 0) return 'Enter a valid, non-negative unit price.'
   if (itemTotal(item) > 999999999) return 'The item amount exceeds the supported limit.'
   return ''
 }
