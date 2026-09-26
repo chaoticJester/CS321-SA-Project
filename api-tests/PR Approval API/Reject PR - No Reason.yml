@@ -1,0 +1,22 @@
+info:
+  name: Reject PR - No Reason
+  type: http
+  seq: 13
+
+http:
+  method: POST
+  url: "{{baseUrl}}/api/pr/{{prId}}/reject"
+  headers:
+    - name: Authorization
+      value: Bearer {{token}}
+  body:
+    type: json
+    data: "{}"
+  auth: inherit
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

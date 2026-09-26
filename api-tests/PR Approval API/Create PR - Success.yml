@@ -16,20 +16,20 @@ http:
     data: |-
       {
         "require_date": "2026-10-30T00:00:00Z",
-        "job_name": "Purchase test monitor",
-        "purpose": "Test PR creation",
-        "asset_type": "IT Equipment",
-        "vendor_name": "Test Vendor",
+        "job_name": "Notebook",
         "items": [
-          {
-            "description": "Monitor",
-            "qty": 2,
-            "unit": "เครื่อง",
-            "unit_price": 2500
+          { "description": "Notebook HP",
+            "qty": 5, "unit": "set", 
+            "unit_price": 22000 
           }
         ]
       }
   auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: bru.setEnvVar("prId", res.body.pr_id);
 
 settings:
   encodeUrl: true
