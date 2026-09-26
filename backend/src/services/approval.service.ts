@@ -1,8 +1,19 @@
 import { RowDataPacket } from 'mysql2';
 import pool from '../config/db';
-import { ApprovalLevel, ApprovalLogRow } from '../types/approval';
+import { ApprovalLevel, ApprovalLogRow, ApproveResult, PrApprovalStatus } from '../types/approval';
 import crypto from 'crypto';
-import { insertApprovalLogs, findNextPendingLog, hasApprovalLogs } from '../models/prApprovalLog.model';
+import {
+    insertApprovalLogs,
+    findNextPendingLog,
+    hasApprovalLogs,
+    lockPrForApproval,
+    markLogApproved,
+    markLogRejected,
+    cancelRemainingLogs,
+    updatePrStatus,
+    findApprovalStatusByPrId,
+} from '../models/prApprovalLog.model';
+import { findPrById } from '../models/pr.model';
 import { Queryable } from '../types/db';
 
 interface ApprovalLevelRow extends RowDataPacket, ApprovalLevel {}
@@ -88,4 +99,116 @@ export async function createApprovalLog(prId: string, chain: ApprovalLevel[], db
 
 export async function getNextApprover(prId: string): Promise<ApprovalLogRow | null> {
     return findNextPendingLog(prId);
+}
+
+export class ApprovalError extends Error {
+    statusCode: number;
+
+    constructor(statusCode: number, message: string) {
+        super(message);
+        this.name = 'ApprovalError';
+        this.statusCode = statusCode;
+    }
+}
+
+export async function approvePr(prId: string, approverId: string): Promise<ApproveResult> {
+    const connection = await pool.getConnection();
+
+    try {
+        await connection.beginTransaction();
+
+        const pr = await lockPrForApproval(prId, connection);
+        if (!pr) {
+            throw new ApprovalError(404, 'PR not found');
+        }
+        if (pr.status !== 'pending') {
+            throw new ApprovalError(409, `PR is already ${pr.status}`);
+        }
+
+        const currentLog = await findNextPendingLog(prId, connection);
+        if (!currentLog) {
+            throw new ApprovalError(409, 'No pending approval step for this PR');
+        }
+        if (currentLog.approver_id !== approverId) {
+            throw new ApprovalError(403, 'It is not your turn to approve this PR');
+        }
+
+        await markLogApproved(currentLog.log_id, connection);
+
+        const nextLog = await findNextPendingLog(prId, connection);
+        const isFinal = nextLog === null;
+
+        if (isFinal) {
+            await updatePrStatus(prId, 'approved', connection);
+        
+        } else {
+            
+        }
+
+        await connection.commit();
+
+        return {
+            pr_id: prId,
+            current_level: currentLog.level_name,
+            is_final: isFinal,
+        };
+    } catch (error) {
+        await connection.rollback();
+        throw error;
+    } finally {
+        connection.release();
+    }
+}
+
+export async function rejectPr(prId: string, approverId: string, reason: string): Promise<void> {
+    const connection = await pool.getConnection();
+
+    try {
+        await connection.beginTransaction();
+
+        const pr = await lockPrForApproval(prId, connection);
+        if (!pr) {
+            throw new ApprovalError(404, 'PR not found');
+        }
+        if (pr.status !== 'pending') {
+            throw new ApprovalError(409, `PR is already ${pr.status}`);
+        }
+
+        const currentLog = await findNextPendingLog(prId, connection);
+        if (!currentLog) {
+            throw new ApprovalError(409, 'No pending approval step for this PR');
+        }
+        if (currentLog.approver_id !== approverId) {
+            throw new ApprovalError(403, 'It is not your turn to review this PR');
+        }
+
+        await markLogRejected(currentLog.log_id, reason, connection);
+        await cancelRemainingLogs(prId, connection);
+        await updatePrStatus(prId, 'rejected', connection);
+        
+
+        await connection.commit();
+    } catch (error) {
+        await connection.rollback();
+        throw error;
+    } finally {
+        connection.release();
+    }
+}
+
+export async function getPrApprovalStatus(prId: string): Promise<PrApprovalStatus> {
+    const pr = await findPrById(prId);
+    if (!pr) {
+        throw new ApprovalError(404, 'PR not found');
+    }
+
+    const chain = await findApprovalStatusByPrId(prId);
+
+    return {
+        pr_id: pr.pr_id,
+        pr_no: pr.pr_no,
+        pr_status: pr.status,
+        total: pr.total_amount,
+        chain,
+    };
 }
