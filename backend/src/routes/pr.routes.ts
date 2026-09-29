@@ -1,19 +1,26 @@
 import {Router} from "express";
 import {authMiddleware} from "../middlewares/auth.middleware.js";
-import {getMyPrs, getPrById} from "../controllers/pr.controller.js";
-import { createPrController } from "../controllers/pr.controller.js";
 import multer from "multer";
 import { uploadPrAttachment } from "../middlewares/prUpload.middleware.js";
 import {
+  listMyPrs,
+  getPrById,
+  createPrController,
   checkPrForUpload,
   addPrAttachment,
+  downloadPrAttachment,
 } from "../controllers/pr.controller.js";
 
 
 const router = Router();
 
+router.get("/", authMiddleware, listMyPrs);
 router.post("/", authMiddleware, createPrController);
-router.get("/", authMiddleware, getMyPrs);
+router.get(
+  "/:id/attachments/:attachmentId/download",
+  authMiddleware,
+  downloadPrAttachment,
+);
 router.get("/:id", authMiddleware, getPrById);
 router.post(
   "/:id/attachments",

@@ -1,23 +1,54 @@
-import type {Request, Response} from "express";
-import {findPrById, findPrsByRequester} from "../models/pr.model.js";
+import type { Response } from "express";
 import type { AuthedRequest } from "../middlewares/auth.middleware.js";
-import type { CreatePrInput } from "../types/pr.js";
 import { createPr } from "../services/pr.service.js";
-import { unlink } from "node:fs/promises";
+import { access, unlink } from "node:fs/promises";
+import path from "node:path";
 import type { NextFunction } from "express";
-import { insertAttachment } from "../models/pr.model.js";
+import type { CreatePrInput, PrStatus } from "../types/pr.js";
+import {
+  uploadDirectory,
+} from "../middlewares/prUpload.middleware.js";
+import {
+  insertAttachment,
+  findPrById,
+  findPrsByRequester,
+  findAttachmentById,
+  canEmployeeAccessPr,
+} from "../models/pr.model.js";
 
+const ALLOWED_STATUSES = new Set<PrStatus>([
+  "pending",
+  "approved",
+  "rejected",
+]);
 
 export async function getPrById(
-  req: Request,
+  req: AuthedRequest,
   res: Response,
 ): Promise<void> {
+  if (!req.user) {
+    res.status(401).json({ message: "Unauthorized" });
+    return;
+  }
+
   try {
     const prId = req.params.id as string;
     const pr = await findPrById(prId);
 
     if (!pr) {
       res.status(404).json({message: "PR not found"});
+      return;
+    }
+
+    const canAccess = await canEmployeeAccessPr(
+      prId,
+      req.user.sub,
+    );
+
+    if (!canAccess) {
+      res.status(403).json({
+        message: "Cannot access this PR",
+      });
       return;
     }
     
@@ -186,16 +217,177 @@ export async function addPrAttachment(
   }
 }
 
-export async function getMyPrs(req: AuthedRequest, res: Response): Promise<void> {
+export async function listMyPrs(
+  req: AuthedRequest,
+  res: Response,
+): Promise<void> {
   if (!req.user) {
     res.status(401).json({ message: "Unauthorized" });
     return;
   }
 
+  const page = Number(req.query.page ?? 1);
+  const limit = Number(req.query.limit ?? 20);
+
+  if (!Number.isInteger(page) || page < 1) {
+    res.status(400).json({
+      message: "page must be a positive integer",
+    });
+    return;
+  }
+
+  if (!Number.isInteger(limit) || limit < 1 || limit > 100) {
+    res.status(400).json({
+      message: "limit must be an integer between 1 and 100",
+    });
+    return;
+  }
+
+  const rawStatus =
+    typeof req.query.status === "string"
+      ? req.query.status
+      : "";
+
+  const statuses = rawStatus
+    .split(",")
+    .map((status) => status.trim())
+    .filter((status) => status.length > 0);
+
+  if (
+    !statuses.every((status) =>
+      ALLOWED_STATUSES.has(status as PrStatus),
+    )
+  ) {
+    res.status(400).json({
+      message: "status must be pending, approved or rejected",
+    });
+    return;
+  }
+
   try {
-    res.status(200).json(await findPrsByRequester(req.user.sub));
+    const result = await findPrsByRequester(
+      req.user.sub,
+      statuses as PrStatus[],
+      page,
+      limit,
+    );
+
+    res.status(200).json({
+      data: result.data,
+      pagination: {
+        page,
+        limit,
+        total: result.total,
+        total_pages: Math.ceil(result.total / limit),
+      },
+    });
   } catch (error) {
     console.error("Failed to list PRs:", error);
-    res.status(500).json({ message: "Internal server error" });
+
+    res.status(500).json({
+      message: "Internal server error",
+    });
+  }
+}
+
+export async function downloadPrAttachment(
+  req: AuthedRequest,
+  res: Response,
+): Promise<void> {
+  if (!req.user) {
+    res.status(401).json({
+      message: "Unauthorized",
+    });
+    return;
+  }
+
+  const prId = req.params.id as string;
+  const attachmentId = req.params.attachmentId as string;
+
+  try {
+    const canAccess = await canEmployeeAccessPr(
+      prId,
+      req.user.sub,
+    );
+
+    if (!canAccess) {
+      res.status(403).json({
+        message: "Cannot access attachments for this PR",
+      });
+      return;
+    }
+
+    const attachment = await findAttachmentById(
+      prId,
+      attachmentId,
+    );
+
+    if (!attachment) {
+      res.status(404).json({
+        message: "Attachment not found",
+      });
+      return;
+    }
+
+    if (
+      path.basename(attachment.file_path) !==
+      attachment.file_path
+    ) {
+      res.status(404).json({
+        message: "Attachment file not found",
+      });
+      return;
+    }
+
+    const absolutePath = path.resolve(
+      uploadDirectory,
+      attachment.file_path,
+    );
+
+    try {
+      await access(absolutePath);
+    } catch {
+      res.status(404).json({
+        message: "Attachment file not found",
+      });
+      return;
+    }
+
+    const extension = path.extname(
+      attachment.file_path,
+    );
+
+    const downloadName =
+      `${prId}-${attachment.attachment_id}${extension}`;
+
+    res.download(
+      absolutePath,
+      downloadName,
+      (error) => {
+        if (!error) {
+          return;
+        }
+
+        console.error(
+          "Failed to download attachment:",
+          error,
+        );
+
+        if (!res.headersSent) {
+          res.status(500).json({
+            message: "Failed to download attachment",
+          });
+        }
+      },
+    );
+  } catch (error) {
+    console.error(
+      "downloadPrAttachment error:",
+      error,
+    );
+
+    res.status(500).json({
+      message: "Internal server error",
+    });
   }
 }

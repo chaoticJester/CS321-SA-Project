@@ -41,9 +41,31 @@ export interface PrItemRow {
 
 export interface PrWithItems extends PrRow {
   items: PrItemRow[];
+  attachments: PrAttachment[];
   total_amount: number;
 }
 
-export interface PrSummary extends PrRow {
+export interface PrListItem {
+  pr_id: string;
+  pr_no: string;
+  requester_id: string;
+  require_date: Date;
+  job_name: string | null;
+  vendor_name: string | null;
+  status: PrStatus;
+  created_at: Date;
   total_amount: number;
+}
+
+export interface PrListResult {
+  data: PrListItem[];
+  total: number;
+}
+
+export interface PrAttachment {
+  attachment_id: string;
+  pr_id: string;
+  file_type: string | null;
+  file_path: string;
+  uploaded_at: Date;
 }

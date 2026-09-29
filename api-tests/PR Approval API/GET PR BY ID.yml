@@ -11,6 +11,29 @@ http:
       value: Bearer {{token}}
   auth: inherit
 
+runtime:
+  scripts:
+    - type: tests
+      code: |-
+        test("PR detail returns attachments", function () {
+          const body = res.getBody();
+
+          expect(res.getStatus()).to.equal(200);
+          expect(body.attachments).to.be.an("array");
+          expect(body.attachments.length).to.be.greaterThan(0);
+        });
+
+        test("uploaded attachment is included", function () {
+          const body = res.getBody();
+
+          const found = body.attachments.some(
+            (attachment) =>
+              attachment.attachment_id === bru.getVar("attachmentId")
+          );
+
+          expect(found).to.equal(true);
+        });
+
 settings:
   encodeUrl: true
   timeout: 0

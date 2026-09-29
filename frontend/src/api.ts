@@ -137,7 +137,19 @@ export async function getPr(prId: string): Promise<Requisition> {
 }
 
 export async function listMyPrs(): Promise<Requisition[]> {
-  const rows = await request<Array<Omit<ApiPr, 'items'>> & { items?: ApiPr['items'] }>('/pr')
+  type PrListResponse = {
+    data: Array<Omit<ApiPr, 'items'> & { items?: ApiPr['items'] }>
+    pagination: { page: number; limit: number; total: number; total_pages: number }
+  }
+
+  const firstPage = await request<PrListResponse>('/pr?limit=100')
+  const remainingPages = await Promise.all(
+    Array.from({ length: Math.max(0, firstPage.pagination.total_pages - 1) }, (_, index) =>
+      request<PrListResponse>(`/pr?page=${index + 2}&limit=100`),
+    ),
+  )
+  const rows = [firstPage, ...remainingPages].flatMap(result => result.data)
+
   return Promise.all(rows.map(row => getPr(row.pr_id)))
 }
 
