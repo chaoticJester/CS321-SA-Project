@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { getSession } from '../api'
+import { useEffect, useState } from 'react'
+import { getMyNotificationCount, getSession } from '../api'
 
 const asset = (name: string) => `${import.meta.env.BASE_URL}figma/${name}`
 
@@ -18,10 +18,17 @@ type RequesterHeaderProps = {
 
 export function RequesterHeader({ active, onHome, onMyRequests, onSignOut, searchValue, onSearchChange, onNotifications, searchLabel = 'Global search' }: RequesterHeaderProps) {
   const [accountOpen, setAccountOpen] = useState(false)
+  const [notificationCount, setNotificationCount] = useState(0)
   const employee = getSession()?.employee
   const initials = employee?.full_name.split(/\s+/).map(part => part[0]).join('').slice(0, 2).toUpperCase() || 'PR'
 
-  return <header className="requester-header h-[84px] rounded-b-md bg-[#e7ebef] text-[#31456c] max-[760px]:h-auto">
+  useEffect(() => {
+    let active = true
+    getMyNotificationCount().then(count => { if (active) setNotificationCount(count) }).catch(() => { if (active) setNotificationCount(0) })
+    return () => { active = false }
+  }, [])
+
+  return <header className="requester-header h-[84px] rounded-b-md bg-[#e7ebef] text-[#31456c] [font-family:'Noto_Sans_Thai','Bai_Jamjuree',sans-serif] max-[760px]:h-auto">
     <div className="relative mx-auto flex h-[84px] w-[min(1216px,calc(100%_-_48px))] items-center max-[1050px]:w-[calc(100%_-_32px)] max-[760px]:h-auto max-[760px]:min-h-[76px] max-[760px]:flex-wrap max-[760px]:gap-3 max-[760px]:py-4">
       <button className="flex items-center gap-[10px] border-0 bg-transparent p-0 text-[#222a2d]" type="button" onClick={onHome} aria-label="SA-PR home">
         <span className="flex w-5 flex-col gap-1"><img className="block h-2 w-5" src={asset('requester-logo-top.svg')} alt="" /><img className="block h-2 w-5" src={asset('requester-logo-bottom.svg')} alt="" /></span>
@@ -30,7 +37,7 @@ export function RequesterHeader({ active, onHome, onMyRequests, onSignOut, searc
       <nav className="ml-4 flex items-center gap-0.5 max-[760px]:order-3 max-[760px]:ml-0 max-[760px]:w-full max-[760px]:overflow-x-auto" aria-label="Requester navigation">
         <button className={`${navItem} ${active === 'home' ? 'bg-white/30' : ''}`} type="button" onClick={onHome}><img className="h-[18px] w-[18px]" src={asset('requester-home.svg')} alt="" />หน้าหลัก</button>
         <button className={`${navItem} ${active === 'requests' ? 'bg-white/30' : ''}`} type="button" onClick={onMyRequests}><img className="h-[18px] w-[18px]" src={asset('requester-requests.svg')} alt="" />คำขอของฉัน</button>
-        <button className={navItem} type="button" onClick={onSignOut}><span className="text-xl leading-none" aria-hidden="true">↪</span>Log out</button>
+        <button className={navItem} type="button" onClick={onSignOut}><img className="h-[18px] w-[18px]" src={asset('requester-logout.svg')} alt="" />Log out</button>
       </nav>
       <label className="relative ml-auto block w-[540px] max-[1180px]:w-[34vw] max-[760px]:order-2 max-[760px]:w-[calc(100%_-_190px)] max-[520px]:order-4 max-[520px]:w-full">
         <span className="sr-only">{searchLabel}</span>
@@ -38,8 +45,8 @@ export function RequesterHeader({ active, onHome, onMyRequests, onSignOut, searc
         <input className="!h-[50px] w-full !rounded-[22px] !border-2 !border-[#8883] !bg-white !py-2 !pl-12 !pr-4 text-base outline-none focus:!border-[#7fa0d5]" aria-label={searchLabel} value={searchValue ?? ''} onChange={event => onSearchChange?.(event.target.value)} readOnly={!onSearchChange} />
       </label>
       <div className="relative ml-[18px] flex items-center gap-1 max-[760px]:ml-auto">
-        <button className="relative grid h-[34px] w-[34px] place-items-center rounded-lg border-0 bg-transparent" type="button" aria-label="3 notifications" onClick={onNotifications}>
-          <img className="h-[18px] w-[18px]" src={asset('requester-bell.svg')} alt="" /><b className="absolute left-[18px] top-[3px] grid h-[15px] w-[15px] place-items-center rounded-full border-2 border-[#888a] bg-[#b4423e] text-[10px] leading-none text-white [font-family:'Sarabun',sans-serif]">3</b>
+        <button className="relative grid h-[34px] w-[34px] place-items-center rounded-lg border-0 bg-transparent" type="button" aria-label={`${notificationCount} notifications`} onClick={onNotifications}>
+          <img className="h-[18px] w-[18px]" src={asset('requester-bell.svg')} alt="" />{notificationCount > 0 ? <b className="absolute left-[18px] top-[3px] grid h-[15px] min-w-[15px] place-items-center rounded-full border-2 border-[#888a] bg-[#b4423e] px-0.5 text-[9px] leading-none text-white [font-family:'Sarabun',sans-serif]">{notificationCount > 99 ? '99+' : notificationCount}</b> : null}
         </button>
         <button className="flex h-[42px] items-center gap-2 rounded-[26px] border-0 bg-[#f7f6f1] py-1 pl-1 pr-[9px] text-left" type="button" aria-expanded={accountOpen} onClick={() => setAccountOpen(open => !open)}>
           <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-[#a9b8a7] text-xs text-[#5e6669]">{initials}</span><span className="flex flex-col text-[#5e6669] max-[520px]:hidden"><strong className="text-sm font-medium leading-4">{employee?.full_name || 'Requester'}</strong><small className="text-xs leading-[14px] opacity-70">{employee?.position || 'พนักงาน'}</small></span><img className="h-[15px] w-[15px] max-[520px]:hidden" src={asset('requester-chevron.svg')} alt="" />

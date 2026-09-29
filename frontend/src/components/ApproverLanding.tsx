@@ -1,6 +1,9 @@
 import { useEffect, useState } from 'react'
-import { getPendingApprovals } from '../api'
+import { approvePr, getPendingApprovals, getPr, rejectPr } from '../api'
 import type { Employee, PendingApproval } from '../api'
+import type { Requisition } from '../model'
+import { grandTotal, money } from '../model'
+import { Modal } from './Modal'
 
 const asset = (name: string) => `${import.meta.env.BASE_URL}figma/${name}`
 
@@ -43,18 +46,47 @@ export function ApproverLanding({ employee, onSignOut }: { employee: Employee; o
   const [accountOpen, setAccountOpen] = useState(false)
   const [notice, setNotice] = useState('')
   const [pending, setPending] = useState<PendingApproval[]>([])
+  const [selected, setSelected] = useState<PendingApproval | null>(null)
+  const [requisition, setRequisition] = useState<Requisition | null>(null)
+  const [passcode, setPasscode] = useState('')
+  const [reason, setReason] = useState('')
+  const [decisionError, setDecisionError] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [queueVersion, setQueueVersion] = useState(0)
   const [loadedAt] = useState(() => Date.now())
-  useEffect(() => { let active = true; getPendingApprovals(employee.employee_id).then(items => { if (active) setPending(items) }).catch(error => { if (active) setNotice(error instanceof Error ? error.message : 'Unable to load approval queue') }); return () => { active = false } }, [employee.employee_id])
+  useEffect(() => { let active = true; getPendingApprovals(employee.employee_id).then(items => { if (active) setPending(items) }).catch(error => { if (active) setNotice(error instanceof Error ? error.message : 'Unable to load approval queue') }); return () => { active = false } }, [employee.employee_id, queueVersion])
   const queue = pending.map(item => {
     const days = Math.max(0, Math.floor((loadedAt - Date.parse(item.created_at)) / 86_400_000))
-    return { id: item.pr_no, subject: item.job_name || 'Purchase Requisition', owner: `${item.requester_name} · ${item.requester_id}`, amount: `฿${Number(item.total_amount).toLocaleString('en-US')}`, waiting: `รอมา ${days} วัน`, overdue: days >= 3 }
+    return { id: item.pr_no, prId: item.pr_id, subject: item.job_name || 'Purchase Requisition', owner: `${item.requester_name} · ${item.requester_id}`, amount: `฿${Number(item.total_amount).toLocaleString('en-US')}`, waiting: `รอมา ${days} วัน`, overdue: days >= 3 }
   })
   const queueTotal = pending.reduce((sum, item) => sum + Number(item.total_amount), 0)
   const oldestDays = pending.reduce((max, item) => Math.max(max, Math.max(0, Math.floor((loadedAt - Date.parse(item.created_at)) / 86_400_000))), 0)
 
+  async function openApproval(item: PendingApproval) {
+    setSelected(item); setRequisition(null); setDecisionError(''); setPasscode(''); setReason('')
+    try { setRequisition(await getPr(item.pr_id)) }
+    catch (error) { setDecisionError(error instanceof Error ? error.message : 'Unable to load this request') }
+  }
+
+  function closeApproval() { if (!busy) { setSelected(null); setRequisition(null); setDecisionError('') } }
+
+  async function decide(action: 'approve' | 'reject') {
+    if (!selected) return
+    if (action === 'approve' && !/^\d{6}$/.test(passcode)) { setDecisionError('Enter your 6-digit passcode / กรุณากรอกรหัส 6 หลัก'); return }
+    if (action === 'reject' && !reason.trim()) { setDecisionError('Enter a rejection reason / กรุณาระบุเหตุผลที่ปฏิเสธ'); return }
+    setBusy(true); setDecisionError('')
+    try {
+      if (action === 'approve') await approvePr(selected.pr_id, passcode)
+      else await rejectPr(selected.pr_id, reason.trim())
+      setNotice(action === 'approve' ? `อนุมัติ ${selected.pr_no} เรียบร้อยแล้ว` : `ปฏิเสธ ${selected.pr_no} เรียบร้อยแล้ว`)
+      setSelected(null); setRequisition(null); setQueueVersion(version => version + 1)
+    } catch (error) { setDecisionError(error instanceof Error ? error.message : 'Could not save the decision') }
+    finally { setBusy(false) }
+  }
+
   function startApproval() {
-    setNotice(queue.length ? `เปิดคำขอ ${queue[0].id} สำหรับตรวจสอบแล้ว` : 'ไม่มีคำขอที่รออนุมัติ')
-    document.getElementById('latest-requests')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    if (pending[0]) void openApproval(pending[0])
+    else setNotice('ไม่มีคำขอที่รออนุมัติ')
   }
 
   return <div className="min-h-svh bg-white text-[#222a2d] [font-family:'Noto_Sans_Thai','Bai_Jamjuree',sans-serif]" data-node-id="367:2835">
@@ -67,11 +99,11 @@ export function ApproverLanding({ employee, onSignOut }: { employee: Employee; o
         <nav className="ml-[220px] flex items-center gap-5 max-[1050px]:ml-[60px] max-[760px]:order-3 max-[760px]:ml-0 max-[760px]:w-full max-[760px]:gap-1 max-[760px]:overflow-x-auto" aria-label="Approver navigation">
           <a className={navItem} href="#approver-overview"><img className="h-[18px] w-[18px]" src={asset('approver-dashboard.svg')} alt="" />แดชบอร์ด</a>
           <a className={navItem} href="#approver-queue"><img className="h-[18px] w-[18px]" src={asset('approver-requests.svg')} alt="" />รายการที่รออนุมัติ <b className="grid h-5 min-w-[27px] place-items-center rounded-[26px] bg-[#4f6fae] px-1.5 text-[11px] text-white">{queue.length}</b></a>
-          <button className={navItem} type="button" onClick={onSignOut}><span aria-hidden="true">↪</span>Log out</button>
+          <button className={navItem} type="button" onClick={onSignOut}><img className="h-[18px] w-[18px]" src={asset('requester-logout.svg')} alt="" />Log out</button>
         </nav>
         <div className="relative ml-auto flex items-center gap-1">
-          <button className="relative grid h-[34px] w-[34px] place-items-center rounded-lg border-0 bg-transparent" type="button" aria-label="3 notifications" onClick={() => setNotice('คุณมีการแจ้งเตือนใหม่ 3 รายการ')}>
-            <img className="h-[18px] w-[18px]" src={asset('approver-bell.svg')} alt="" /><b className="absolute left-[18px] top-[3px] grid h-[15px] w-[15px] place-items-center rounded-full border-2 border-[#888a] bg-[#b4423e] text-[10px] leading-none text-white [font-family:'Sarabun',sans-serif]">3</b>
+          <button className="relative grid h-[34px] w-[34px] place-items-center rounded-lg border-0 bg-transparent" type="button" aria-label={`${pending.length} notifications`} onClick={() => setNotice(pending.length ? `คุณมีคำขอที่รออนุมัติ ${pending.length} รายการ` : 'ไม่มีคำขอที่รออนุมัติ')}>
+            <img className="h-[18px] w-[18px]" src={asset('approver-bell.svg')} alt="" />{pending.length > 0 ? <b className="absolute left-[18px] top-[3px] grid h-[15px] min-w-[15px] place-items-center rounded-full border-2 border-[#888a] bg-[#b4423e] px-0.5 text-[9px] leading-none text-white [font-family:'Sarabun',sans-serif]">{pending.length > 99 ? '99+' : pending.length}</b> : null}
           </button>
           <button className="flex h-[42px] min-w-[145px] items-center gap-2 rounded-[26px] border-0 bg-[#7fa0d559] py-1 pl-1 pr-[9px] text-left max-[760px]:w-12 max-[760px]:min-w-12 max-[760px]:pr-1" type="button" aria-expanded={accountOpen} onClick={() => setAccountOpen(open => !open)}>
             <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-white text-xs text-[#31456c]">{employee.full_name.split(/\s+/).map(part => part[0]).join('').slice(0, 2)}</span><span className="flex flex-1 flex-col text-[#222a2d] max-[760px]:hidden"><strong className="text-sm font-medium leading-4">{employee.full_name}</strong><small className="text-xs leading-[14px] opacity-70">{employee.position || 'ผู้บริหาร'}</small></span><img className="h-[15px] w-[15px] max-[760px]:hidden" src={asset('approver-chevron.svg')} alt="" />
@@ -89,7 +121,7 @@ export function ApproverLanding({ employee, onSignOut }: { employee: Employee; o
           <div className="flex items-baseline gap-[22px] max-[760px]:items-start max-[760px]:gap-3"><strong className="text-[42px] leading-[76px] tracking-[-0.84px] [font-family:'Bai_Jamjuree',sans-serif] max-[760px]:text-[34px] max-[760px]:leading-[42px]">{queue.length}</strong><div><h1 id="approval-queue-title" className="text-[28px] font-bold leading-[38px] [font-family:'Sarabun','Noto_Sans_Thai',sans-serif] max-[760px]:text-xl max-[760px]:leading-7">คำขอรอการอนุมัติของคุณ</h1><div className="mt-[10px] flex items-center gap-[26px] text-base leading-6 text-[#e7ebefb3] max-[760px]:flex-wrap max-[760px]:gap-x-[18px] max-[760px]:gap-y-[5px] max-[760px]:text-[13px]"><span className="flex items-center gap-[7px]">เก่าสุดรอมา <b className="font-medium text-white">{oldestDays} วัน</b></span><span className="flex items-center gap-[7px] text-[#e6b865]"><img className="h-5 w-5" src={asset('approver-overdue.svg')} alt="" />เกินกำหนด <b className="font-medium">{queue.filter(item => item.overdue).length} รายการ</b></span><span className="flex items-center gap-[7px]">รวมวงเงิน <b className="font-medium text-white">฿{queueTotal.toLocaleString('en-US')}</b></span></div></div></div>
           <button className="h-12 rounded-lg border-0 bg-white px-[26px] font-medium text-[#173f4a]! max-[760px]:whitespace-nowrap max-[760px]:px-[14px] max-[430px]:self-end" type="button" onClick={startApproval}>เริ่มอนุมัติ</button>
         </div>
-        <div>{queue.map(item => <button className="grid min-h-[52px] w-full grid-cols-[128px_minmax(180px,1fr)_210px_96px_82px] items-center gap-[18px] border-0 border-t border-[#e7ebef29] bg-transparent py-[14px] pl-4 pr-[14px] text-left text-base text-white hover:bg-[#ffffff0a] max-[1050px]:grid-cols-[120px_minmax(170px,1fr)_170px_90px_82px] max-[1050px]:gap-3 max-[760px]:grid-cols-[1fr_auto] max-[760px]:gap-x-3 max-[760px]:gap-y-[5px] max-[760px]:px-0" type="button" key={item.id} onClick={() => setNotice(`เลือก ${item.id} — ${item.subject}`)}>
+        <div>{queue.map(item => <button className="grid min-h-[52px] w-full grid-cols-[128px_minmax(180px,1fr)_210px_96px_82px] items-center gap-[18px] border-0 border-t border-[#e7ebef29] bg-transparent py-[14px] pl-4 pr-[14px] text-left text-base text-white hover:bg-[#ffffff0a] max-[1050px]:grid-cols-[120px_minmax(170px,1fr)_170px_90px_82px] max-[1050px]:gap-3 max-[760px]:grid-cols-[1fr_auto] max-[760px]:gap-x-3 max-[760px]:gap-y-[5px] max-[760px]:px-0" type="button" key={item.id} onClick={() => { const row = pending.find(value => value.pr_id === item.prId); if (row) void openApproval(row) }}>
           <span className="text-[#e7ebefb3] [font-family:'Bai_Jamjuree',sans-serif] [font-weight:500] max-[760px]:col-start-1 max-[760px]:row-start-1">{item.id}</span><strong className="font-normal max-[760px]:col-span-full max-[760px]:row-start-2">{item.subject}</strong><span className="text-right text-[15px] text-[#e7ebef9e] max-[760px]:col-start-1 max-[760px]:row-start-3 max-[760px]:text-left">{item.owner}</span><b className="text-right font-medium max-[760px]:col-start-2 max-[760px]:row-start-3">{item.amount}</b><em className={`text-right not-italic max-[760px]:col-start-2 max-[760px]:row-start-1 ${item.overdue ? 'font-medium text-[#e6b865]' : 'text-[#e7ebef9e]'}`}>{item.waiting}</em>
         </button>)}</div>
       </section>
@@ -137,5 +169,15 @@ export function ApproverLanding({ employee, onSignOut }: { employee: Employee; o
         </table></div>
       </section>
     </main>
+    {selected && <Modal title={`${selected.pr_no} · ${selected.job_name || 'Purchase Requisition'}`} onClose={closeApproval} wide>
+      {!requisition && !decisionError && <p role="status">Loading request…</p>}
+      {decisionError && <p className="form-error" role="alert">{decisionError}</p>}
+      {requisition && <>
+        <dl className="requester-meta"><div><dt>Requester</dt><dd>{selected.requester_name} · {selected.requester_id}</dd></div><div><dt>Required date</dt><dd>{requisition.basic.requiredDate}</dd></div><div><dt>Purpose</dt><dd>{requisition.basic.purpose || '—'}</dd></div><div><dt>Total</dt><dd>฿{money(grandTotal(requisition.items))}</dd></div></dl>
+        <div className="mt-5 overflow-x-auto"><table className="w-full min-w-[560px] border-collapse text-sm"><thead><tr className="border-b border-[#d7dbde] text-left"><th className="p-3">Item</th><th className="p-3">Quantity</th><th className="p-3 text-right">Unit price</th><th className="p-3 text-right">Total</th></tr></thead><tbody>{requisition.items.map(item => <tr className="border-b border-[#d7dbde]" key={item.id}><td className="p-3">{item.name}</td><td className="p-3">{item.quantity} {item.unit}</td><td className="p-3 text-right">฿{money(Number(item.price))}</td><td className="p-3 text-right">฿{money(Number(item.quantity) * Number(item.price))}</td></tr>)}</tbody></table></div>
+        <div className="mt-6 grid gap-4"><label className="auth-field"><span>รหัสอนุมัติ / Approval passcode</span><input type="password" inputMode="numeric" maxLength={6} value={passcode} onChange={event => setPasscode(event.target.value.replace(/\D/g, ''))} disabled={busy} placeholder="6 digits" /></label><label className="auth-field"><span>เหตุผลที่ปฏิเสธ / Rejection reason</span><textarea maxLength={255} value={reason} onChange={event => setReason(event.target.value)} disabled={busy} rows={3} /></label></div>
+        <div className="modal-actions"><button className="button cancel" type="button" disabled={busy} onClick={() => void decide('reject')}>{busy ? 'Saving…' : 'Reject'}</button><button className="button primary" type="button" disabled={busy} onClick={() => void decide('approve')}>{busy ? 'Saving…' : 'Approve'}</button></div>
+      </>}
+    </Modal>}
   </div>
 }

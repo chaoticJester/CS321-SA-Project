@@ -3,6 +3,7 @@ import { fileError } from '../model'
 import type { Attachment } from '../model'
 import type { AttachmentInfo } from '../model'
 import { documentTypes, purchaserSections } from '../formOptions'
+import { PolishedSelect } from './PolishedSelect'
 
 export function Attachments({ attachments, attachmentInfo, purchaser, onAttachments, onAttachmentInfo, onPurchaser, onError }: { attachments: Attachment[]; attachmentInfo: AttachmentInfo; purchaser: string; onAttachments: (files: Attachment[]) => void; onAttachmentInfo: (value: AttachmentInfo) => void; onPurchaser: (value: string) => void; onError: (text: string) => void }) {
   const picker = useRef<HTMLInputElement>(null)
@@ -21,12 +22,12 @@ export function Attachments({ attachments, attachmentInfo, purchaser, onAttachme
   const changeInfo = (key: keyof AttachmentInfo, value: string) => onAttachmentInfo({ ...attachmentInfo, [key]: value })
   return <section className="attachment-panel bordered-panel"><div className="attachment-content"><h2>Attachment / เอกสารแนบ</h2>
     <div className="document-meta-grid">
-      <label className="pr-field"><span><b className="required">*</b> Document Type</span><select aria-label="Document Type" required value={attachmentInfo.documentType} onChange={e => changeInfo('documentType', e.target.value)}><option value="">&lt;กรุณาเลือก / Please select&gt;</option>{documentTypes.map(option => <option key={option}>{option}</option>)}</select></label>
+      <label className="pr-field"><span><b className="required">*</b> Document Type</span><PolishedSelect ariaLabel="Document Type" required value={attachmentInfo.documentType} options={documentTypes} onChange={text => changeInfo('documentType', text)} /></label>
       <label className="pr-field"><span><b className="required">*</b> Document No.</span><input aria-label="Document No." required value={attachmentInfo.documentNo} onChange={e => changeInfo('documentNo', e.target.value)} /></label>
       <label className="pr-field"><span><b className="required">*</b> Document Date</span><input aria-label="Document Date" type="date" required value={attachmentInfo.documentDate} onChange={e => changeInfo('documentDate', e.target.value)} /></label>
     </div>
     <div className={`dropzone ${dragging ? 'dragging' : ''}`} onDragOver={e => { e.preventDefault(); setDragging(true) }} onDragLeave={() => setDragging(false)} onDrop={e => { e.preventDefault(); setDragging(false); accept(Array.from(e.dataTransfer.files)) }}><span>Drag &amp; drop<br />files here</span><span className="muted">or</span><div><button type="button" className="upload-button" onClick={() => picker.current?.click()}>Upload File</button><small>*JPG, PNG, PDF<br />(ขนาดไม่เกิน 5 MB)</small></div><input ref={picker} aria-label="Upload attachments" type="file" accept=".jpg,.jpeg,.png,.pdf" multiple hidden onChange={e => { accept(Array.from(e.target.files || [])); e.target.value = '' }} /></div>
     {attachments.length > 0 && <ul className="attachment-list">{attachments.map(attachment => <li key={attachment.id}><button type="button" className="text-button filename" onClick={() => download(attachment)}>{attachment.file.name}<small>{(attachment.file.size / 1024).toFixed(1)} KB</small></button><button type="button" className="text-button danger-text" aria-label={`Remove ${attachment.file.name}`} onClick={() => onAttachments(attachments.filter(a => a.id !== attachment.id))}>Remove</button></li>)}</ul>}
-    <h2 className="purchaser-heading">Purchase In-Charge / ผู้รับผิดชอบในการจัดซื้อ</h2><div className="purchaser-card"><div className="avatar" aria-hidden="true" /><label className="pr-field"><span><b className="required">*</b> Purchaser Section / ส่วนการจัดซื้อ</span><select aria-label="Purchaser Section" required value={purchaser} onChange={e => onPurchaser(e.target.value)}><option value="">&lt;กรุณาเลือก / Please select&gt;</option>{purchaserSections.map(option => <option key={option}>{option}</option>)}</select></label></div>
+    <h2 className="purchaser-heading">Purchase In-Charge / ผู้รับผิดชอบในการจัดซื้อ</h2><div className="purchaser-card"><div className="avatar" aria-hidden="true" /><label className="pr-field"><span><b className="required">*</b> Purchaser Section / ส่วนการจัดซื้อ</span><PolishedSelect ariaLabel="Purchaser Section" required value={purchaser} options={purchaserSections} onChange={onPurchaser} /></label></div>
   </div></section>
 }

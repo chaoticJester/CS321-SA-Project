@@ -9,6 +9,7 @@ import {
   checkPrForUpload,
   addPrAttachment,
   downloadPrAttachment,
+  getMyNotificationCount,
 } from "../controllers/pr.controller.js";
 
 
@@ -16,6 +17,7 @@ const router = Router();
 
 router.get("/", authMiddleware, listMyPrs);
 router.post("/", authMiddleware, createPrController);
+router.get("/notification-count", authMiddleware, getMyNotificationCount);
 router.get(
   "/:id/attachments/:attachmentId/download",
   authMiddleware,

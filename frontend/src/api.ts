@@ -153,6 +153,11 @@ export async function listMyPrs(): Promise<Requisition[]> {
   return Promise.all(rows.map(row => getPr(row.pr_id)))
 }
 
+export async function getMyNotificationCount(): Promise<number> {
+  const result = await request<{ count: number }>('/pr/notification-count')
+  return Number.isFinite(result.count) ? Math.max(0, result.count) : 0
+}
+
 export async function createPr(value: Requisition): Promise<Requisition> {
   const result = await request<{ pr_id: string }>('/pr', {
     method: 'POST',
@@ -183,4 +188,18 @@ export async function createPr(value: Requisition): Promise<Requisition> {
 
 export function getPendingApprovals(employeeId: string) {
   return request<PendingApproval[]>(`/employees/${encodeURIComponent(employeeId)}/pending-approvals`)
+}
+
+export function approvePr(prId: string, passcode: string) {
+  return request<{ message: string; pr_id: string; current_level: string; is_final: boolean }>(`/pr/${encodeURIComponent(prId)}/approve`, {
+    method: 'POST',
+    body: JSON.stringify({ passcode }),
+  })
+}
+
+export function rejectPr(prId: string, reason: string) {
+  return request<{ message: string; pr_id: string }>(`/pr/${encodeURIComponent(prId)}/reject`, {
+    method: 'POST',
+    body: JSON.stringify({ reason }),
+  })
 }

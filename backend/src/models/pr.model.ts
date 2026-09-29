@@ -233,6 +233,20 @@ export async function findPrsByRequester(
   };
 }
 
+export async function countPendingPrsByRequester(
+  requesterId: string,
+): Promise<number> {
+  const [rows] = await pool.query<CountRow[]>(
+    `SELECT COUNT(*) AS total
+     FROM pr
+     WHERE requester_id = ?
+       AND status = 'pending'`,
+    [requesterId],
+  );
+
+  return Number(rows[0]?.total ?? 0);
+}
+
 export async function findAttachmentById(
   prId: string,
   attachmentId: string,

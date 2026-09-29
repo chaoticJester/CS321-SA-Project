@@ -14,6 +14,7 @@ import {
   findPrsByRequester,
   findAttachmentById,
   canEmployeeAccessPr,
+  countPendingPrsByRequester,
 } from "../models/pr.model.js";
 
 const ALLOWED_STATUSES = new Set<PrStatus>([
@@ -287,6 +288,24 @@ export async function listMyPrs(
     res.status(500).json({
       message: "Internal server error",
     });
+  }
+}
+
+export async function getMyNotificationCount(
+  req: AuthedRequest,
+  res: Response,
+): Promise<void> {
+  if (!req.user) {
+    res.status(401).json({ message: "Unauthorized" });
+    return;
+  }
+
+  try {
+    const count = await countPendingPrsByRequester(req.user.sub);
+    res.status(200).json({ count });
+  } catch (error) {
+    console.error("Failed to count notifications:", error);
+    res.status(500).json({ message: "Internal server error" });
   }
 }
 
