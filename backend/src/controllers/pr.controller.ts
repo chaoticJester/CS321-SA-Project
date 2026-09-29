@@ -1,5 +1,5 @@
 import type {Request, Response} from "express";
-import {findPrById} from "../models/pr.model.js";
+import {findPrById, findPrsByRequester} from "../models/pr.model.js";
 import type { AuthedRequest } from "../middlewares/auth.middleware.js";
 import type { CreatePrInput } from "../types/pr.js";
 import { createPr } from "../services/pr.service.js";
@@ -183,5 +183,19 @@ export async function addPrAttachment(
 
     console.error("Failed to save attachment:", error);
     res.status(500).json({ message: "Failed to save attachment" });
+  }
+}
+
+export async function getMyPrs(req: AuthedRequest, res: Response): Promise<void> {
+  if (!req.user) {
+    res.status(401).json({ message: "Unauthorized" });
+    return;
+  }
+
+  try {
+    res.status(200).json(await findPrsByRequester(req.user.sub));
+  } catch (error) {
+    console.error("Failed to list PRs:", error);
+    res.status(500).json({ message: "Internal server error" });
   }
 }

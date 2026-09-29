@@ -1,12 +1,8 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import { getPendingApprovals } from '../api'
+import type { Employee, PendingApproval } from '../api'
 
 const asset = (name: string) => `${import.meta.env.BASE_URL}figma/${name}`
-
-const queue = [
-  { id: 'PR-2024-0582', subject: 'จัดซื้ออุปกรณ์สำนักงาน', owner: 'ณัฐวุฒิ · ฝ่ายจัดซื้อ', amount: '฿48,500', waiting: 'รอมา 3 วัน', overdue: true },
-  { id: 'FN-2024-0198', subject: 'ค่าเดินทางไปประชุมลูกค้า', owner: 'กมลชนก · ฝ่ายการเงิน', amount: '฿12,400', waiting: 'รอมา 1 วัน' },
-  { id: 'PR-2024-0577', subject: 'วัสดุสิ้นเปลืองสายการผลิต 2', owner: 'ธนกฤต · ฝ่ายผลิต', amount: '฿224,000', waiting: 'รอมา 4 วัน', overdue: true },
-]
 
 const totals = [
   { label: 'คำขอทั้งหมด', value: '1,240', delta: '12% จากเดือนก่อน', icon: 'approver-trend-total.svg' },
@@ -43,12 +39,21 @@ function Status({ tone, children }: { tone: string; children: string }) {
   return <span className={`inline-flex items-center gap-1.5 whitespace-nowrap rounded-[26px] border px-[10px] py-1 text-sm ${statusStyles[tone]}`}><img className="h-3 w-3" src={asset(`approver-status-${tone}.svg`)} alt="" />{children}</span>
 }
 
-export function ApproverLanding({ onSignOut }: { onSignOut: () => void }) {
+export function ApproverLanding({ employee, onSignOut }: { employee: Employee; onSignOut: () => void }) {
   const [accountOpen, setAccountOpen] = useState(false)
   const [notice, setNotice] = useState('')
+  const [pending, setPending] = useState<PendingApproval[]>([])
+  const [loadedAt] = useState(() => Date.now())
+  useEffect(() => { let active = true; getPendingApprovals(employee.employee_id).then(items => { if (active) setPending(items) }).catch(error => { if (active) setNotice(error instanceof Error ? error.message : 'Unable to load approval queue') }); return () => { active = false } }, [employee.employee_id])
+  const queue = pending.map(item => {
+    const days = Math.max(0, Math.floor((loadedAt - Date.parse(item.created_at)) / 86_400_000))
+    return { id: item.pr_no, subject: item.job_name || 'Purchase Requisition', owner: `${item.requester_name} · ${item.requester_id}`, amount: `฿${Number(item.total_amount).toLocaleString('en-US')}`, waiting: `รอมา ${days} วัน`, overdue: days >= 3 }
+  })
+  const queueTotal = pending.reduce((sum, item) => sum + Number(item.total_amount), 0)
+  const oldestDays = pending.reduce((max, item) => Math.max(max, Math.max(0, Math.floor((loadedAt - Date.parse(item.created_at)) / 86_400_000))), 0)
 
   function startApproval() {
-    setNotice('เปิดคำขอ PR-2024-0582 สำหรับตรวจสอบแล้ว')
+    setNotice(queue.length ? `เปิดคำขอ ${queue[0].id} สำหรับตรวจสอบแล้ว` : 'ไม่มีคำขอที่รออนุมัติ')
     document.getElementById('latest-requests')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
   }
 
@@ -61,7 +66,7 @@ export function ApproverLanding({ onSignOut }: { onSignOut: () => void }) {
         </a>
         <nav className="ml-[220px] flex items-center gap-5 max-[1050px]:ml-[60px] max-[760px]:order-3 max-[760px]:ml-0 max-[760px]:w-full max-[760px]:gap-1 max-[760px]:overflow-x-auto" aria-label="Approver navigation">
           <a className={navItem} href="#approver-overview"><img className="h-[18px] w-[18px]" src={asset('approver-dashboard.svg')} alt="" />แดชบอร์ด</a>
-          <a className={navItem} href="#approver-queue"><img className="h-[18px] w-[18px]" src={asset('approver-requests.svg')} alt="" />รายการที่รออนุมัติ <b className="grid h-5 min-w-[27px] place-items-center rounded-[26px] bg-[#4f6fae] px-1.5 text-[11px] text-white">12</b></a>
+          <a className={navItem} href="#approver-queue"><img className="h-[18px] w-[18px]" src={asset('approver-requests.svg')} alt="" />รายการที่รออนุมัติ <b className="grid h-5 min-w-[27px] place-items-center rounded-[26px] bg-[#4f6fae] px-1.5 text-[11px] text-white">{queue.length}</b></a>
           <button className={navItem} type="button" onClick={onSignOut}><span aria-hidden="true">↪</span>Log out</button>
         </nav>
         <div className="relative ml-auto flex items-center gap-1">
@@ -69,9 +74,9 @@ export function ApproverLanding({ onSignOut }: { onSignOut: () => void }) {
             <img className="h-[18px] w-[18px]" src={asset('approver-bell.svg')} alt="" /><b className="absolute left-[18px] top-[3px] grid h-[15px] w-[15px] place-items-center rounded-full border-2 border-[#888a] bg-[#b4423e] text-[10px] leading-none text-white [font-family:'Sarabun',sans-serif]">3</b>
           </button>
           <button className="flex h-[42px] min-w-[145px] items-center gap-2 rounded-[26px] border-0 bg-[#7fa0d559] py-1 pl-1 pr-[9px] text-left max-[760px]:w-12 max-[760px]:min-w-12 max-[760px]:pr-1" type="button" aria-expanded={accountOpen} onClick={() => setAccountOpen(open => !open)}>
-            <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-white text-xs text-[#31456c]">ชช</span><span className="flex flex-1 flex-col text-[#222a2d] max-[760px]:hidden"><strong className="text-sm font-medium leading-4">Chatchai P.</strong><small className="text-xs leading-[14px] opacity-70">ผู้บริหาร</small></span><img className="h-[15px] w-[15px] max-[760px]:hidden" src={asset('approver-chevron.svg')} alt="" />
+            <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-white text-xs text-[#31456c]">{employee.full_name.split(/\s+/).map(part => part[0]).join('').slice(0, 2)}</span><span className="flex flex-1 flex-col text-[#222a2d] max-[760px]:hidden"><strong className="text-sm font-medium leading-4">{employee.full_name}</strong><small className="text-xs leading-[14px] opacity-70">{employee.position || 'ผู้บริหาร'}</small></span><img className="h-[15px] w-[15px] max-[760px]:hidden" src={asset('approver-chevron.svg')} alt="" />
           </button>
-          {accountOpen && <div className="absolute right-0 top-[50px] z-4 w-[175px] rounded-[9px] border border-[#d7dbde] bg-white p-[14px] text-[13px] shadow-[0_12px_30px_#2c3f6820]" role="status">ผู้อนุมัติระดับ 2<br /><small>Approver Level 2</small></div>}
+          {accountOpen && <div className="absolute right-0 top-[50px] z-4 w-[175px] rounded-[9px] border border-[#d7dbde] bg-white p-[14px] text-[13px] shadow-[0_12px_30px_#2c3f6820]" role="status">{employee.full_name}<br /><small>{employee.approval_level_id}</small></div>}
         </div>
       </div>
     </header>
@@ -81,7 +86,7 @@ export function ApproverLanding({ onSignOut }: { onSignOut: () => void }) {
 
       <section id="approver-queue" className="scroll-mt-5 rounded-[18px] bg-[#2c3f68] px-8 pb-[18px] pt-[30px] text-white max-[760px]:px-5 max-[760px]:pb-[14px] max-[760px]:pt-6" aria-labelledby="approval-queue-title">
         <div className="flex items-start justify-between pb-[26px] max-[760px]:gap-5 max-[430px]:flex-col">
-          <div className="flex items-baseline gap-[22px] max-[760px]:items-start max-[760px]:gap-3"><strong className="text-[42px] leading-[76px] tracking-[-0.84px] [font-family:'Bai_Jamjuree',sans-serif] max-[760px]:text-[34px] max-[760px]:leading-[42px]">12</strong><div><h1 id="approval-queue-title" className="text-[28px] font-bold leading-[38px] [font-family:'Sarabun','Noto_Sans_Thai',sans-serif] max-[760px]:text-xl max-[760px]:leading-7">คำขอรอการอนุมัติของคุณ</h1><div className="mt-[10px] flex items-center gap-[26px] text-base leading-6 text-[#e7ebefb3] max-[760px]:flex-wrap max-[760px]:gap-x-[18px] max-[760px]:gap-y-[5px] max-[760px]:text-[13px]"><span className="flex items-center gap-[7px]">เก่าสุดรอมา <b className="font-medium text-white">3 วัน</b></span><span className="flex items-center gap-[7px] text-[#e6b865]"><img className="h-5 w-5" src={asset('approver-overdue.svg')} alt="" />เกินกำหนด <b className="font-medium">2 รายการ</b></span><span className="flex items-center gap-[7px]">รวมวงเงิน <b className="font-medium text-white">฿1,284,900</b></span></div></div></div>
+          <div className="flex items-baseline gap-[22px] max-[760px]:items-start max-[760px]:gap-3"><strong className="text-[42px] leading-[76px] tracking-[-0.84px] [font-family:'Bai_Jamjuree',sans-serif] max-[760px]:text-[34px] max-[760px]:leading-[42px]">{queue.length}</strong><div><h1 id="approval-queue-title" className="text-[28px] font-bold leading-[38px] [font-family:'Sarabun','Noto_Sans_Thai',sans-serif] max-[760px]:text-xl max-[760px]:leading-7">คำขอรอการอนุมัติของคุณ</h1><div className="mt-[10px] flex items-center gap-[26px] text-base leading-6 text-[#e7ebefb3] max-[760px]:flex-wrap max-[760px]:gap-x-[18px] max-[760px]:gap-y-[5px] max-[760px]:text-[13px]"><span className="flex items-center gap-[7px]">เก่าสุดรอมา <b className="font-medium text-white">{oldestDays} วัน</b></span><span className="flex items-center gap-[7px] text-[#e6b865]"><img className="h-5 w-5" src={asset('approver-overdue.svg')} alt="" />เกินกำหนด <b className="font-medium">{queue.filter(item => item.overdue).length} รายการ</b></span><span className="flex items-center gap-[7px]">รวมวงเงิน <b className="font-medium text-white">฿{queueTotal.toLocaleString('en-US')}</b></span></div></div></div>
           <button className="h-12 rounded-lg border-0 bg-white px-[26px] font-medium text-[#173f4a]! max-[760px]:whitespace-nowrap max-[760px]:px-[14px] max-[430px]:self-end" type="button" onClick={startApproval}>เริ่มอนุมัติ</button>
         </div>
         <div>{queue.map(item => <button className="grid min-h-[52px] w-full grid-cols-[128px_minmax(180px,1fr)_210px_96px_82px] items-center gap-[18px] border-0 border-t border-[#e7ebef29] bg-transparent py-[14px] pl-4 pr-[14px] text-left text-base text-white hover:bg-[#ffffff0a] max-[1050px]:grid-cols-[120px_minmax(170px,1fr)_170px_90px_82px] max-[1050px]:gap-3 max-[760px]:grid-cols-[1fr_auto] max-[760px]:gap-x-3 max-[760px]:gap-y-[5px] max-[760px]:px-0" type="button" key={item.id} onClick={() => setNotice(`เลือก ${item.id} — ${item.subject}`)}>

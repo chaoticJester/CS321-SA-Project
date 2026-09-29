@@ -2,7 +2,7 @@ import type { ResultSetHeader, PoolConnection, RowDataPacket } from "mysql2/prom
 import { randomBytes } from "node:crypto";
 import type { CreatePrInput } from "../types/pr.js";
 import pool from "../config/db.js";
-import type { PrRow, PrItemRow, PrWithItems } from "../types/pr.js";
+import type { PrRow, PrItemRow, PrWithItems, PrSummary } from "../types/pr.js";
 
 type PrDbRow = Omit<PrRow, "require_date"> &
   RowDataPacket & {
@@ -113,6 +113,29 @@ export async function findPrById(
     items,
     total_amount: totalAmount,
   };
+}
+
+export async function findPrsByRequester(requesterId: string): Promise<PrSummary[]> {
+  const [rows] = await pool.query<(PrDbRow & { total_amount: string })[]>(
+    `SELECT
+       pr.pr_id, pr.pr_no, pr.requester_id,
+       DATE_FORMAT(pr.require_date, '%Y-%m-%dT%H:%i:%sZ') AS require_date,
+       pr.job_name, pr.purpose, pr.asset_type, pr.vendor_name,
+       pr.status, pr.created_at,
+       COALESCE(SUM(item.qty * item.unit_price), 0) AS total_amount
+     FROM pr
+     LEFT JOIN pr_item item ON item.pr_id = pr.pr_id
+     WHERE pr.requester_id = ?
+     GROUP BY pr.pr_id
+     ORDER BY pr.created_at DESC`,
+    [requesterId],
+  );
+
+  return rows.map(row => ({
+    ...row,
+    require_date: new Date(row.require_date),
+    total_amount: Number(row.total_amount),
+  }));
 }
 
 export async function insertAttachment(

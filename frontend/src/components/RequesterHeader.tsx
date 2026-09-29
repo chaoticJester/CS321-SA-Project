@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { getSession } from '../api'
 
 const asset = (name: string) => `${import.meta.env.BASE_URL}figma/${name}`
 
@@ -17,6 +18,8 @@ type RequesterHeaderProps = {
 
 export function RequesterHeader({ active, onHome, onMyRequests, onSignOut, searchValue, onSearchChange, onNotifications, searchLabel = 'Global search' }: RequesterHeaderProps) {
   const [accountOpen, setAccountOpen] = useState(false)
+  const employee = getSession()?.employee
+  const initials = employee?.full_name.split(/\s+/).map(part => part[0]).join('').slice(0, 2).toUpperCase() || 'PR'
 
   return <header className="requester-header h-[84px] rounded-b-md bg-[#e7ebef] text-[#31456c] max-[760px]:h-auto">
     <div className="relative mx-auto flex h-[84px] w-[min(1216px,calc(100%_-_48px))] items-center max-[1050px]:w-[calc(100%_-_32px)] max-[760px]:h-auto max-[760px]:min-h-[76px] max-[760px]:flex-wrap max-[760px]:gap-3 max-[760px]:py-4">
@@ -39,9 +42,9 @@ export function RequesterHeader({ active, onHome, onMyRequests, onSignOut, searc
           <img className="h-[18px] w-[18px]" src={asset('requester-bell.svg')} alt="" /><b className="absolute left-[18px] top-[3px] grid h-[15px] w-[15px] place-items-center rounded-full border-2 border-[#888a] bg-[#b4423e] text-[10px] leading-none text-white [font-family:'Sarabun',sans-serif]">3</b>
         </button>
         <button className="flex h-[42px] items-center gap-2 rounded-[26px] border-0 bg-[#f7f6f1] py-1 pl-1 pr-[9px] text-left" type="button" aria-expanded={accountOpen} onClick={() => setAccountOpen(open => !open)}>
-          <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-[#a9b8a7] text-xs text-[#5e6669]">อก</span><span className="flex flex-col text-[#5e6669] max-[520px]:hidden"><strong className="text-sm font-medium leading-4">Amika R.</strong><small className="text-xs leading-[14px] opacity-70">พนักงาน</small></span><img className="h-[15px] w-[15px] max-[520px]:hidden" src={asset('requester-chevron.svg')} alt="" />
+          <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-[#a9b8a7] text-xs text-[#5e6669]">{initials}</span><span className="flex flex-col text-[#5e6669] max-[520px]:hidden"><strong className="text-sm font-medium leading-4">{employee?.full_name || 'Requester'}</strong><small className="text-xs leading-[14px] opacity-70">{employee?.position || 'พนักงาน'}</small></span><img className="h-[15px] w-[15px] max-[520px]:hidden" src={asset('requester-chevron.svg')} alt="" />
         </button>
-        {accountOpen ? <div className="absolute right-0 top-[50px] z-20 w-[170px] rounded-lg border border-[#d7dbde] bg-white p-3 text-sm shadow-[0_12px_30px_#2c3f6820]" role="status">Amika R.<br /><small>Requester / พนักงาน</small></div> : null}
+        {accountOpen ? <div className="absolute right-0 top-[50px] z-20 w-[190px] rounded-lg border border-[#d7dbde] bg-white p-3 text-sm shadow-[0_12px_30px_#2c3f6820]" role="status">{employee?.full_name || 'Requester'}<br /><small>{employee?.department || 'Requester / พนักงาน'}</small></div> : null}
       </div>
     </div>
   </header>

@@ -9,10 +9,12 @@ import { PrintableRequisition, Review } from './Review'
 import { Modal } from './Modal'
 import { Icon } from './Icon'
 import { RequesterHeader } from './RequesterHeader'
+import { createPr } from '../api'
+import type { Employee } from '../api'
 
 const steps = [['Basic Info', 'ข้อมูลทั่วไป'], ['Items', 'รายการสินค้า'], ['Attachment', 'เอกสารแนบ'], ['Review & Submit', 'ตรวจสอบและส่ง']]
 const stepNodeIds = ['384:6213', '384:6385', '384:7471', '384:6925']
-export function PurchaseRequisition({ onClose, onSignOut, onSubmitted, onViewRequests }: { onClose: () => void; onSignOut: () => void; onSubmitted: (value: Requisition) => void; onViewRequests: () => void }) {
+export function PurchaseRequisition({ employee, onClose, onSignOut, onSubmitted, onViewRequests }: { employee: Employee; onClose: () => void; onSignOut: () => void; onSubmitted: (value: Requisition) => void; onViewRequests: () => void }) {
   const [value, setValue] = useState<Requisition>(newRequisition)
   const [ready, setReady] = useState(false)
   const [error, setError] = useState('')
@@ -40,6 +42,7 @@ export function PurchaseRequisition({ onClose, onSignOut, onSubmitted, onViewReq
       return !items.length ? 'Add at least one item / กรุณาเพิ่มรายการสินค้า' : items.map(itemError).find(Boolean) || ''
     }
     if (step === 3 && !value.purchaser) return 'Select a purchaser section / กรุณาเลือกส่วนการจัดซื้อ'
+    if (step === 3 && ![value.attachmentInfo?.documentType, value.attachmentInfo?.documentNo, value.attachmentInfo?.documentDate].every(field => field?.trim())) return 'Complete the attachment document details / กรุณากรอกข้อมูลเอกสารแนบให้ครบถ้วน'
     return ''
   }
   function next(event: FormEvent) { event.preventDefault(); const message = validate(value.step); if (message) setError(message); else move(value.step + 1) }
@@ -54,15 +57,19 @@ export function PurchaseRequisition({ onClose, onSignOut, onSubmitted, onViewReq
     if (message) { setError(message); return }
     if (grandTotal(value.items) > BUDGET) { setError('This request exceeds the available budget. Reduce the order amount before submitting.'); return }
     setBusy(true); setError('')
-    const submitted = { ...value, items: activeItems(value.items), reference: `PR-${new Date().getFullYear()}-${crypto.randomUUID().slice(0, 8).toUpperCase()}` }
-    try { await persistRequisition(submitted, true); setValue(submitted); setDirty(false); onSubmitted(submitted); setModal('success') }
-    catch { setError('Could not save the submission. Your request has not been submitted; please try again.') }
+    const submitted = { ...value, items: activeItems(value.items) }
+    try {
+      const saved = await createPr(submitted)
+      await persistRequisition(saved, true)
+      setValue(saved); setDirty(false); onSubmitted(saved); setModal('success')
+    }
+    catch (error) { setError(error instanceof Error ? error.message : 'Could not submit the request. Please try again.') }
     finally { setBusy(false) }
   }
   function startNew() { setValue(newRequisition()); setModal(null); setNotice(''); setDirty(false) }
   if (!ready) return <main className="loading-page" role="status">Loading your requisition…</main>
   return <><div className="min-h-svh bg-white"><RequesterHeader onHome={onClose} onMyRequests={onViewRequests} onSignOut={() => dirty ? setModal('signout') : onSignOut()} /><main className="pr-page" data-node-id={stepNodeIds[value.step - 1]}><header className="pr-header"><div className="pr-heading"><div><h1>Create Purchase Requisition (PR)</h1><p>สร้างใบขอสั่งซื้อ (PR)</p></div><div className="header-actions"><button className="button cancel" type="button" disabled={busy} onClick={() => setModal('cancel')}>Cancel</button><button className="button save" type="button" disabled={busy} onClick={save}><Icon name="save" />{busy ? 'Saving…' : 'Save Draft'}</button></div></div>
-    <dl className="requester-meta"><div><dt>Name/ชื่อ :</dt><dd>Worawut Jintasri</dd></div><div><dt>PR No./เลขที่ :</dt><dd>{value.reference || '—'}</dd></div><div><dt>Site/สาขา :</dt><dd>Head Office</dd></div><div><dt>Position/ตำแหน่ง :</dt><dd>Requester</dd></div><div><dt>PR Date/วันที่ :</dt><dd>{new Date(value.createdAt).toLocaleDateString('en-GB')}</dd></div><div><dt>Section/แผนก :</dt><dd>Technology Development</dd></div></dl>
+    <dl className="requester-meta"><div><dt>Name/ชื่อ :</dt><dd>{employee.full_name}</dd></div><div><dt>PR No./เลขที่ :</dt><dd>{value.reference || '—'}</dd></div><div><dt>Site/สาขา :</dt><dd>Head Office</dd></div><div><dt>Position/ตำแหน่ง :</dt><dd>{employee.position || 'Requester'}</dd></div><div><dt>PR Date/วันที่ :</dt><dd>{new Date(value.createdAt).toLocaleDateString('en-GB')}</dd></div><div><dt>Section/แผนก :</dt><dd>{employee.department || '—'}</dd></div></dl>
   </header><nav aria-label="Purchase requisition steps"><ol className="stepper">{steps.map(([en, th], index) => <li key={en} className={index + 1 === value.step ? 'current' : ''}><button type="button" disabled={index + 1 > value.step || busy} aria-current={index + 1 === value.step ? 'step' : undefined} onClick={() => move(index + 1)}><span className="step-number">{index + 1}</span><span>{en}<small>{th}</small></span></button></li>)}</ol></nav>
     {notice && <div className="notice" role="status">{notice}<button type="button" className="text-button" aria-label="Dismiss notification" onClick={() => setNotice('')}>Dismiss</button></div>}
     {error && <p className="form-error" role="alert">{error}</p>}
@@ -70,7 +77,7 @@ export function PurchaseRequisition({ onClose, onSignOut, onSubmitted, onViewReq
       <fieldset className="flow-fields" disabled={busy}>
       {value.step === 1 && <BasicInfo value={value.basic} onChange={basic => update({ basic })} />}
       {value.step === 2 && <Items items={value.items} onChange={items => update({ items })} remark={value.remark} onRemark={remark => update({ remark })} onError={setError} />}
-      {value.step === 3 && <Attachments attachments={value.attachments} purchaser={value.purchaser} onAttachments={attachments => update({ attachments })} onPurchaser={purchaser => update({ purchaser })} onError={setError} />}
+      {value.step === 3 && <Attachments attachments={value.attachments} attachmentInfo={value.attachmentInfo || { documentType: '', documentNo: '', documentDate: '' }} purchaser={value.purchaser} onAttachments={attachments => update({ attachments })} onAttachmentInfo={attachmentInfo => update({ attachmentInfo })} onPurchaser={purchaser => update({ purchaser })} onError={setError} />}
       {value.step === 4 && <Review value={value} onRemark={remark => update({ remark })} onBack={() => move(3)} onSubmit={submit} onPreview={() => setModal('pdf')} busy={busy} />}
       {value.step < 4 && <div className="step-actions">{value.step > 1 && <button type="button" className="button secondary" onClick={() => move(value.step - 1)}>Back</button>}<button className="button primary" type="submit">Next</button></div>}
       </fieldset>

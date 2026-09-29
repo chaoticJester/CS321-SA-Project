@@ -7,9 +7,12 @@ export type Item = {
   detail: string; quantity: string; unit: string; price: string;
 }
 export type Attachment = { id: string; file: File }
+export type AttachmentInfo = { documentType: string; documentNo: string; documentDate: string }
 export type Requisition = {
   basic: BasicInfo; items: Item[]; attachments: Attachment[]; purchaser: string;
+  attachmentInfo: AttachmentInfo;
   remark: string; step: number; createdAt: string; reference?: string;
+  backendId?: string; status?: 'pending' | 'approved' | 'rejected'; approval?: import('./api').ApprovalStatus;
 }
 export const BUDGET = 130000
 export const DRAFT_KEY = 'current-draft'
@@ -17,7 +20,7 @@ export function emptyItem(): Item {
   return { id: crypto.randomUUID(), budgetCode: '', name: '', brand: '', model: '', detail: '', quantity: '', unit: '', price: '' }
 }
 export function newRequisition(): Requisition {
-  return { basic: { job: '', mainGroup: '', budgetType: '', requiredDate: '', budgetCode: '', purpose: '', line: '', description: '', currency: 'THB' }, items: [emptyItem()], attachments: [], purchaser: '', remark: '', step: 1, createdAt: new Date().toISOString() }
+  return { basic: { job: '', mainGroup: '', budgetType: '', requiredDate: '', budgetCode: '', purpose: '', line: '', description: '', currency: 'THB' }, items: [emptyItem()], attachments: [], attachmentInfo: { documentType: '', documentNo: '', documentDate: '' }, purchaser: '', remark: '', step: 1, createdAt: new Date().toISOString() }
 }
 export const activeItems = (items: Item[]) => items.filter(item => Object.entries(item).some(([key, value]) => key !== 'id' && value.trim()))
 export const money = (value: number) => value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
@@ -33,6 +36,13 @@ export function itemTotal(item: Item) {
   return Math.round(quantity * price * 100) / 100
 }
 export const grandTotal = (items: Item[]) => Math.round(items.reduce((sum, item) => sum + itemTotal(item), 0) * 100) / 100
+export function requestCounts(requests: Requisition[]) {
+  return {
+    active: requests.filter(request => request.status === 'pending').length,
+    history: requests.filter(request => request.status === 'approved' || request.status === 'rejected').length,
+    all: requests.length,
+  }
+}
 export function itemError(item: Item) {
   if (!item.name.trim()) return 'Enter an item name / กรุณาระบุชื่อสินค้า'
   if (!item.budgetCode.trim()) return 'Enter a budget code / กรุณาระบุงบประมาณเลขที่'

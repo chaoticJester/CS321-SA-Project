@@ -1,6 +1,6 @@
 import {Router} from "express";
 import {authMiddleware} from "../middlewares/auth.middleware.js";
-import {getPrById} from "../controllers/pr.controller.js";
+import {getMyPrs, getPrById} from "../controllers/pr.controller.js";
 import { createPrController } from "../controllers/pr.controller.js";
 import multer from "multer";
 import { uploadPrAttachment } from "../middlewares/prUpload.middleware.js";
@@ -13,6 +13,7 @@ import {
 const router = Router();
 
 router.post("/", authMiddleware, createPrController);
+router.get("/", authMiddleware, getMyPrs);
 router.get("/:id", authMiddleware, getPrById);
 router.post(
   "/:id/attachments",

@@ -24,9 +24,13 @@ export async function findPendingApprovalsForEmployee(
   employeeId: string
 ): Promise<PendingApprovalItem[]> {
   const [rows] = await pool.query<PendingApprovalRow[]>(
-    `SELECT pr.pr_id, pr.pr_no, pr.job_name, pr.requester_id, pr.created_at
+    `SELECT pr.pr_id, pr.pr_no, pr.job_name, pr.requester_id, pr.created_at,
+            requester.full_name AS requester_name,
+            COALESCE(SUM(item.qty * item.unit_price), 0) AS total_amount
      FROM approval_log al
      JOIN pr ON pr.pr_id = al.pr_id
+     JOIN employee requester ON requester.employee_id = pr.requester_id
+     LEFT JOIN pr_item item ON item.pr_id = pr.pr_id
      WHERE al.approver_id = ?
        AND al.job_action = 'pending'
        AND al.level_id = (
@@ -36,7 +40,9 @@ export async function findPendingApprovalsForEmployee(
          WHERE al2.pr_id = al.pr_id AND al2.job_action = 'pending'
          ORDER BY lvl2.sequence_order ASC
          LIMIT 1
-       )`,
+       )
+     GROUP BY pr.pr_id, pr.pr_no, pr.job_name, pr.requester_id, pr.created_at, requester.full_name
+     ORDER BY pr.created_at ASC`,
     [employeeId]
   );
   return rows;

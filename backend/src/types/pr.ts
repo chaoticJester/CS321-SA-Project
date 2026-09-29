@@ -43,3 +43,7 @@ export interface PrWithItems extends PrRow {
   items: PrItemRow[];
   total_amount: number;
 }
+
+export interface PrSummary extends PrRow {
+  total_amount: number;
+}
