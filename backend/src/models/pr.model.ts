@@ -5,9 +5,9 @@ import type {
   PrRow,
   PrItemRow,
   PrWithItems,
-  PrListItem,
   PrListResult,
   PrStatus,
+  PrAttachment,
 } from "../types/pr.js";
 import pool from "../config/db.js";
 
@@ -26,15 +26,18 @@ interface PrListDbRow extends RowDataPacket {
 interface CountRow extends RowDataPacket {
   total: number;
 }
-
+interface PrAccessDbRow extends RowDataPacket {
+  can_access: number;
+}
+interface LatestPrNumberRow extends RowDataPacket {
+    pr_no: string;
+}
 type PrDbRow = Omit<PrRow, "require_date"> &
   RowDataPacket & {
     require_date: string;
 };
 type PrItemDbRow = PrItemRow & RowDataPacket;
-interface LatestPrNumberRow extends RowDataPacket {
-    pr_no: string;
-}
+type AttachmentDbRow = PrAttachment & RowDataPacket;
 
 export async function getLatestPrNumber(
     connection: PoolConnection,
@@ -125,6 +128,21 @@ export async function findPrById(
     [prId],
   );
 
+  const [attachments] = await pool.query<AttachmentDbRow[]>(
+    `
+      SELECT
+        attachment_id,
+        pr_id,
+        file_type,
+        file_path,
+        uploaded_at
+      FROM attachment
+      WHERE pr_id = ?
+      ORDER BY uploaded_at DESC
+    `,
+    [prId],
+  );
+
   const totalAmount = items.reduce(
     (sum, item) => sum + item.qty * Number(item.unit_price),
     0
@@ -134,6 +152,7 @@ export async function findPrById(
     ...pr,
     require_date: new Date(pr.require_date),
     items,
+    attachments,
     total_amount: totalAmount,
   };
 }
@@ -212,4 +231,51 @@ export async function findPrsByRequester(
     })),
     total: Number(countRows[0]?.total ?? 0),
   };
+}
+
+export async function findAttachmentById(
+  prId: string,
+  attachmentId: string,
+): Promise<PrAttachment | null> {
+  const [rows] = await pool.query<AttachmentDbRow[]>(
+    `
+      SELECT
+        attachment_id,
+        pr_id,
+        file_type,
+        file_path,
+        uploaded_at
+      FROM attachment
+      WHERE pr_id = ?
+        AND attachment_id = ?
+      LIMIT 1
+    `,
+    [prId, attachmentId],
+  );
+
+  return rows[0] ?? null;
+}
+
+export async function canEmployeeAccessPr(
+  prId: string,
+  employeeId: string,
+): Promise<boolean> {
+  const [rows] = await pool.query<PrAccessDbRow[]>(
+    `
+      SELECT EXISTS (
+        SELECT 1
+        FROM pr
+        LEFT JOIN approval_log
+          ON approval_log.pr_id = pr.pr_id
+        WHERE pr.pr_id = ?
+          AND (
+            pr.requester_id = ?
+            OR approval_log.approver_id = ?
+          )
+      ) AS can_access
+    `,
+    [prId, employeeId, employeeId],
+  );
+
+  return Boolean(rows[0]?.can_access);
 }

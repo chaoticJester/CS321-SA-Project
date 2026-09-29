@@ -17,6 +17,9 @@ Backend สำหรับระบบสร้างและอนุมัต
 | สร้างและอ่าน PR/approval status | ผ่าน |
 | pending approvals และการบังคับลำดับผู้อนุมัติ | ผ่าน — ผู้อนุมัติผิดลำดับได้รับ `403` |
 | แนบไฟล์ PDF/JPEG/PNG | ผ่านด้วยไฟล์ `image/png` |
+| แสดงรายการไฟล์แนบใน PR detail | ผ่าน |
+| ดาวน์โหลดไฟล์แนบ | ผ่าน — requester และ approver ดาวน์โหลดได้ และไฟล์ตรงกับต้นฉบับ |
+| authorization ของ PR detail/ไฟล์แนบ | ผ่าน — ผู้ใช้ที่ไม่เกี่ยวข้องได้รับ `403` |
 | approve จนครบ approval chain | ผ่าน — PR เปลี่ยนเป็น `approved` |
 | reject approval flow | ผ่าน — PR เป็น `rejected` และขั้นที่เหลือเป็น `cancelled` |
 | รายการคำขอของผู้ใช้ `GET /api/pr` | ผ่าน — ownership, status filter, pagination และยอดรวมทำงานถูกต้อง |
@@ -187,8 +190,9 @@ Token มีอายุ 8 ชั่วโมง หากไม่ส่ง hea
 | `GET` | `/api/employees/:id/pending-approvals` | ดู PR ที่รอพนักงานคนนี้อนุมัติในลำดับปัจจุบัน | Bearer token |
 | `GET` | `/api/pr` | ดูรายการคำขอของผู้ใช้ปัจจุบัน พร้อม filter และ pagination | Bearer token |
 | `POST` | `/api/pr` | สร้าง PR พร้อมรายการสินค้าและ approval chain | Bearer token |
-| `GET` | `/api/pr/:id` | อ่าน PR พร้อมรายการสินค้าและยอดรวม | Bearer token |
+| `GET` | `/api/pr/:id` | อ่าน PR พร้อมสินค้า ยอดรวม และไฟล์แนบ | Bearer token; requester/approver |
 | `POST` | `/api/pr/:id/attachments` | แนบ PDF/JPEG/PNG ให้ PR | Bearer token |
+| `GET` | `/api/pr/:id/attachments/:attachmentId/download` | ดาวน์โหลดไฟล์แนบ | Bearer token; requester/approver |
 | `GET` | `/api/pr/:id/status` | อ่านสถานะ PR และทุกขั้นอนุมัติ | Bearer token |
 | `POST` | `/api/pr/:id/approve` | อนุมัติขั้นปัจจุบัน | Bearer token + passcode |
 | `POST` | `/api/pr/:id/reject` | ปฏิเสธ PR ในขั้นปัจจุบัน | Bearer token |
@@ -393,7 +397,7 @@ Errors สำคัญ: `400` เมื่อ body, วันที่ หรื
 
 ### `GET /api/pr/:id`
 
-อ่าน PR, รายการสินค้า และคำนวณ `total_amount` จากผลรวม `qty * unit_price`
+อ่าน PR, รายการสินค้า, รายการไฟล์แนบ และคำนวณ `total_amount` จากผลรวม `qty * unit_price` ผู้เรียกต้องเป็น requester หรือเป็น approver ที่อยู่ใน approval chain ของ PR
 
 Response `200`:
 
@@ -419,11 +423,25 @@ Response `200`:
       "unit_price": "22000.00"
     }
   ],
+  "attachments": [
+    {
+      "attachment_id": "AT0123456789abcdef",
+      "pr_id": "PR0001",
+      "file_type": "application/pdf",
+      "file_path": "0123456789abcdef0123456789abcdef.pdf",
+      "uploaded_at": "2026-07-01T02:05:00.000Z"
+    }
+  ],
   "total_amount": 110000
 }
 ```
 
-Errors สำคัญ: `401` เมื่อ token ไม่ถูกต้อง, `404` เมื่อไม่พบ PR และ `500` เมื่อเกิดข้อผิดพลาดภายใน
+Errors สำคัญ:
+
+- `401` เมื่อไม่มี token หรือ token ไม่ถูกต้อง
+- `403` เมื่อผู้ใช้ไม่ใช่ requester หรือ approver ของ PR
+- `404` เมื่อไม่พบ PR
+- `500` เมื่อเกิดข้อผิดพลาดภายใน
 
 ### `POST /api/pr/:id/attachments`
 
@@ -458,7 +476,41 @@ Errors สำคัญ:
 - `404` เมื่อไม่พบ PR
 - `413` เมื่อไฟล์เกิน 10 MB
 
-> API นี้ยังไม่มี endpoint สำหรับ download และ Express ยังไม่ได้เปิด `uploads/` เป็น static directory
+### `GET /api/pr/:id/attachments/:attachmentId/download`
+
+ดาวน์โหลดไฟล์แนบ ผู้เรียกต้องเป็น requester หรือ approver ใน approval chain ของ PR ระบบอ่านไฟล์ผ่าน endpoint นี้โดยตรงและไม่ได้เปิดโฟลเดอร์ `uploads/` เป็น static directory
+
+ตัวอย่าง:
+
+```bash
+curl -L \
+  "http://localhost:3000/api/pr/PR0001/attachments/AT0123456789abcdef/download" \
+  -H "Authorization: Bearer <token>" \
+  -o downloaded-file.pdf
+```
+
+หากต้องการให้ curl ใช้ชื่อจาก `Content-Disposition`:
+
+```bash
+curl -L -OJ \
+  "http://localhost:3000/api/pr/PR0001/attachments/AT0123456789abcdef/download" \
+  -H "Authorization: Bearer <token>"
+```
+
+เนื่องจากฐานข้อมูลไม่ได้เก็บชื่อไฟล์ต้นฉบับ ระบบจะสร้างชื่อดาวน์โหลดในรูปแบบ:
+
+```text
+<PR_ID>-<ATTACHMENT_ID>.<extension>
+```
+
+Response `200` เป็น binary file พร้อม header `Content-Disposition: attachment` ไม่ใช่ JSON
+
+Errors สำคัญ:
+
+- `401` เมื่อไม่มี token หรือ token ไม่ถูกต้อง
+- `403` เมื่อผู้ใช้ไม่ใช่ requester หรือ approver ของ PR
+- `404` เมื่อไม่พบ attachment, path ไม่ถูกต้อง หรือไฟล์ไม่มีอยู่บน disk
+- `500` เมื่อเกิดข้อผิดพลาดภายในหรือส่งไฟล์ไม่สำเร็จ
 
 ### `GET /api/pr/:id/status`
 
@@ -598,7 +650,7 @@ Errors สำคัญ:
 - `/health` ตรวจเฉพาะ HTTP server ไม่ได้ตรวจ MySQL
 - ยังไม่มี automated unit/integration tests
 - ยังไม่มี global 404 handler หรือ standard error schema
-- endpoint ที่รับ `:id` ไม่มี authorization แบบจำกัดให้ดูเฉพาะข้อมูลของตนเอง ยกเว้นการแนบไฟล์และลำดับ approve/reject
-- มีการบันทึกไฟล์แนบ แต่ยังไม่มี API สำหรับอ่านหรือดาวน์โหลดไฟล์
+- `GET /api/pr/:id/status` ยังเปิดให้ผู้ใช้ที่มี token ทุกคนดูสถานะได้ หากรู้ PR ID
+- ระบบไม่เก็บชื่อไฟล์ต้นฉบับ ชื่อไฟล์ดาวน์โหลดจึงถูกสร้างจาก PR ID และ attachment ID
 - `reject` ไม่ต้องยืนยัน passcode ซ้ำ แต่ `approve` ต้องยืนยัน
 - หากมีพนักงานหลายคนใช้ `approval_level_id` เดียวกัน ระบบจะเลือกเพียงหนึ่งคนโดยไม่มีลำดับที่รับประกัน ควรกำหนดกติกาการเลือก approver หรือบังคับ uniqueness ให้ชัดเจน

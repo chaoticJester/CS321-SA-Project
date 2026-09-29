@@ -8,6 +8,7 @@ import {
   createPrController,
   checkPrForUpload,
   addPrAttachment,
+  downloadPrAttachment,
 } from "../controllers/pr.controller.js";
 
 
@@ -15,6 +16,11 @@ const router = Router();
 
 router.get("/", authMiddleware, listMyPrs);
 router.post("/", authMiddleware, createPrController);
+router.get(
+  "/:id/attachments/:attachmentId/download",
+  authMiddleware,
+  downloadPrAttachment,
+);
 router.get("/:id", authMiddleware, getPrById);
 router.post(
   "/:id/attachments",
