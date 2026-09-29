@@ -43,3 +43,20 @@ export interface PrWithItems extends PrRow {
   items: PrItemRow[];
   total_amount: number;
 }
+
+export interface PrListItem {
+  pr_id: string;
+  pr_no: string;
+  requester_id: string;
+  require_date: Date;
+  job_name: string | null;
+  vendor_name: string | null;
+  status: PrStatus;
+  created_at: Date;
+  total_amount: number;
+}
+
+export interface PrListResult {
+  data: PrListItem[];
+  total: number;
+}

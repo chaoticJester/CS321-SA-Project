@@ -1,12 +1,17 @@
 import type {Request, Response} from "express";
-import {findPrById} from "../models/pr.model.js";
 import type { AuthedRequest } from "../middlewares/auth.middleware.js";
-import type { CreatePrInput } from "../types/pr.js";
 import { createPr } from "../services/pr.service.js";
 import { unlink } from "node:fs/promises";
 import type { NextFunction } from "express";
 import { insertAttachment } from "../models/pr.model.js";
+import { findPrById, findPrsByRequester } from "../models/pr.model.js";
+import type { CreatePrInput, PrStatus } from "../types/pr.js";
 
+const ALLOWED_STATUSES = new Set<PrStatus>([
+  "pending",
+  "approved",
+  "rejected",
+]);
 
 export async function getPrById(
   req: Request,
@@ -183,5 +188,78 @@ export async function addPrAttachment(
 
     console.error("Failed to save attachment:", error);
     res.status(500).json({ message: "Failed to save attachment" });
+  }
+}
+
+export async function listMyPrs(
+  req: AuthedRequest,
+  res: Response,
+): Promise<void> {
+  if (!req.user) {
+    res.status(401).json({ message: "Unauthorized" });
+    return;
+  }
+
+  const page = Number(req.query.page ?? 1);
+  const limit = Number(req.query.limit ?? 20);
+
+  if (!Number.isInteger(page) || page < 1) {
+    res.status(400).json({
+      message: "page must be a positive integer",
+    });
+    return;
+  }
+
+  if (!Number.isInteger(limit) || limit < 1 || limit > 100) {
+    res.status(400).json({
+      message: "limit must be an integer between 1 and 100",
+    });
+    return;
+  }
+
+  const rawStatus =
+    typeof req.query.status === "string"
+      ? req.query.status
+      : "";
+
+  const statuses = rawStatus
+    .split(",")
+    .map((status) => status.trim())
+    .filter((status) => status.length > 0);
+
+  if (
+    !statuses.every((status) =>
+      ALLOWED_STATUSES.has(status as PrStatus),
+    )
+  ) {
+    res.status(400).json({
+      message: "status must be pending, approved or rejected",
+    });
+    return;
+  }
+
+  try {
+    const result = await findPrsByRequester(
+      req.user.sub,
+      statuses as PrStatus[],
+      page,
+      limit,
+    );
+
+    res.status(200).json({
+      data: result.data,
+      pagination: {
+        page,
+        limit,
+        total: result.total,
+        total_pages: Math.ceil(result.total / limit),
+      },
+    });
+  } catch (error) {
+    console.error("Failed to list PRs:", error);
+
+    res.status(500).json({
+      message: "Internal server error",
+    });
   }
 }

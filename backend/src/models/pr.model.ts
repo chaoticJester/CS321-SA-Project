@@ -1,8 +1,31 @@
 import type { ResultSetHeader, PoolConnection, RowDataPacket } from "mysql2/promise";
 import { randomBytes } from "node:crypto";
-import type { CreatePrInput } from "../types/pr.js";
+import type {
+  CreatePrInput,
+  PrRow,
+  PrItemRow,
+  PrWithItems,
+  PrListItem,
+  PrListResult,
+  PrStatus,
+} from "../types/pr.js";
 import pool from "../config/db.js";
-import type { PrRow, PrItemRow, PrWithItems } from "../types/pr.js";
+
+interface PrListDbRow extends RowDataPacket {
+  pr_id: string;
+  pr_no: string;
+  requester_id: string;
+  require_date: Date;
+  job_name: string | null;
+  vendor_name: string | null;
+  status: PrStatus;
+  created_at: Date;
+  total_amount: string;
+}
+
+interface CountRow extends RowDataPacket {
+  total: number;
+}
 
 type PrDbRow = Omit<PrRow, "require_date"> &
   RowDataPacket & {
@@ -130,4 +153,63 @@ export async function insertAttachment(
   );
   
   return attachmentId;
+}
+
+export async function findPrsByRequester(
+  requesterId: string,
+  statuses: PrStatus[],
+  page: number,
+  limit: number,
+): Promise<PrListResult> {
+  const offset = (page - 1) * limit;
+
+  let where = "WHERE pr.requester_id = ?";
+  const params: unknown[] = [requesterId];
+
+  if (statuses.length > 0) {
+    where += " AND pr.status IN (?)";
+    params.push(statuses);
+  }
+
+  const [countRows] = await pool.query<CountRow[]>(
+    `
+      SELECT COUNT(*) AS total
+      FROM pr
+      ${where}
+    `,
+    params,
+  );
+
+  const [rows] = await pool.query<PrListDbRow[]>(
+    `
+      SELECT
+        pr.pr_id,
+        pr.pr_no,
+        pr.requester_id,
+        pr.require_date,
+        pr.job_name,
+        pr.vendor_name,
+        pr.status,
+        pr.created_at,
+        (
+          SELECT COALESCE(SUM(item.qty * item.unit_price), 0)
+          FROM pr_item item
+          WHERE item.pr_id = pr.pr_id
+        ) AS total_amount
+      FROM pr
+      ${where}
+      ORDER BY pr.created_at DESC
+      LIMIT ?
+      OFFSET ?
+    `,
+    [...params, limit, offset],
+  );
+
+  return {
+    data: rows.map((row) => ({
+      ...row,
+      total_amount: Number(row.total_amount),
+    })),
+    total: Number(countRows[0]?.total ?? 0),
+  };
 }

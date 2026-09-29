@@ -1,10 +1,11 @@
 import {Router} from "express";
 import {authMiddleware} from "../middlewares/auth.middleware.js";
-import {getPrById} from "../controllers/pr.controller.js";
-import { createPrController } from "../controllers/pr.controller.js";
 import multer from "multer";
 import { uploadPrAttachment } from "../middlewares/prUpload.middleware.js";
 import {
+  listMyPrs,
+  getPrById,
+  createPrController,
   checkPrForUpload,
   addPrAttachment,
 } from "../controllers/pr.controller.js";
@@ -12,6 +13,7 @@ import {
 
 const router = Router();
 
+router.get("/", authMiddleware, listMyPrs);
 router.post("/", authMiddleware, createPrController);
 router.get("/:id", authMiddleware, getPrById);
 router.post(

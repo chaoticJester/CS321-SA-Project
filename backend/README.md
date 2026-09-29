@@ -19,6 +19,9 @@ Backend สำหรับระบบสร้างและอนุมัต
 | แนบไฟล์ PDF/JPEG/PNG | ผ่านด้วยไฟล์ `image/png` |
 | approve จนครบ approval chain | ผ่าน — PR เปลี่ยนเป็น `approved` |
 | reject approval flow | ผ่าน — PR เป็น `rejected` และขั้นที่เหลือเป็น `cancelled` |
+| รายการคำขอของผู้ใช้ `GET /api/pr` | ผ่าน — ownership, status filter, pagination และยอดรวมทำงานถูกต้อง |
+| ประวัติคำขอ `status=approved,rejected` | ผ่าน — ส่งคืนทั้ง PR ที่อนุมัติและปฏิเสธ |
+| validation ของรายการคำขอ | ผ่าน — status/page/limit ผิดรูปแบบตอบ `400` และไม่มี token ตอบ `401` |
 | `npm test` | ไม่ผ่าน — โปรเจกต์ยังไม่มี automated test และ script ปัจจุบันตั้งใจจบด้วย error |
 
 การทดสอบ integration ใช้ข้อมูลทดสอบชั่วคราวกับ MySQL จริง และลบ PR/ไฟล์แนบทดสอบออกหลังเสร็จแล้ว อย่างไรก็ตามโปรเจกต์ยังควรมี automated tests เพื่อให้รันทดสอบซ้ำและตรวจ regression ได้อย่างสม่ำเสมอ
@@ -48,6 +51,13 @@ JWT_SECRET=replace_with_a_strong_secret
 ```bash
 mysql -u root -p < database/schema.sql
 mysql -u root -p pr_approval < database/seed_data.sql
+```
+
+หากสร้างฐานข้อมูลไว้ก่อนที่จะเพิ่ม API รายการคำขอ ให้เพิ่ม index นี้หนึ่งครั้ง (ฐานข้อมูลใหม่ที่สร้างจาก `schema.sql` มี index นี้แล้ว):
+
+```sql
+CREATE INDEX idx_pr_requester_status_created
+ON pr (requester_id, status, created_at);
 ```
 
 เริ่มเซิร์ฟเวอร์สำหรับพัฒนา:
@@ -175,6 +185,7 @@ Token มีอายุ 8 ชั่วโมง หากไม่ส่ง hea
 | `POST` | `/api/auth/login` | เข้าสู่ระบบและรับ JWT | ไม่ต้องใช้ |
 | `GET` | `/api/employees/:id` | อ่านข้อมูลพนักงาน | Bearer token |
 | `GET` | `/api/employees/:id/pending-approvals` | ดู PR ที่รอพนักงานคนนี้อนุมัติในลำดับปัจจุบัน | Bearer token |
+| `GET` | `/api/pr` | ดูรายการคำขอของผู้ใช้ปัจจุบัน พร้อม filter และ pagination | Bearer token |
 | `POST` | `/api/pr` | สร้าง PR พร้อมรายการสินค้าและ approval chain | Bearer token |
 | `GET` | `/api/pr/:id` | อ่าน PR พร้อมรายการสินค้าและยอดรวม | Bearer token |
 | `POST` | `/api/pr/:id/attachments` | แนบ PDF/JPEG/PNG ให้ PR | Bearer token |
@@ -272,6 +283,69 @@ Response `200`:
 หากไม่มีงานรออนุมัติจะตอบ `200` เป็น array ว่าง `[]`
 
 > ปัจจุบันผู้ใช้ที่ login แล้วสามารถดู pending approvals ของ employee ID ใดก็ได้
+
+### `GET /api/pr`
+
+ส่งรายการคำขอของผู้ใช้ที่ login อยู่ โดยอ่าน `requester_id` จาก JWT ผู้เรียกจึงไม่ต้องและไม่สามารถกำหนด employee ID ผ่าน query string ได้ รายการเรียงจาก `created_at` ล่าสุดไปเก่าสุด และส่งเฉพาะข้อมูลสรุปโดยไม่รวม `items`
+
+Query parameters:
+
+| Parameter | ค่าเริ่มต้น | รายละเอียด |
+|---|---:|---|
+| `status` | ทุกสถานะ | `pending`, `approved` หรือ `rejected`; ระบุหลายค่าโดยคั่นด้วย comma |
+| `page` | `1` | หน้าที่ต้องการ ต้องเป็นจำนวนเต็มตั้งแต่ 1 ขึ้นไป |
+| `limit` | `20` | จำนวนรายการต่อหน้า ต้องเป็นจำนวนเต็มระหว่าง 1–100 |
+
+ตัวอย่างการใช้งาน:
+
+```http
+GET /api/pr
+GET /api/pr?status=pending&page=1&limit=20
+GET /api/pr?status=approved,rejected&page=1&limit=20
+```
+
+การนำไปใช้ใน frontend:
+
+- หน้า **คำขอของฉัน** ใช้ `GET /api/pr`
+- แท็บ **กำลังดำเนินการ** ใช้ `GET /api/pr?status=pending`
+- หน้า **ประวัติคำขอ** ใช้ `GET /api/pr?status=approved,rejected`
+- เมื่อผู้ใช้เลือกรายการ ให้เปิดรายละเอียดด้วย `GET /api/pr/:id`
+
+Response `200`:
+
+```json
+{
+  "data": [
+    {
+      "pr_id": "PR0123456789abcdef",
+      "pr_no": "IT-003-PR",
+      "requester_id": "EMP001",
+      "require_date": "2026-10-15T00:00:00.000Z",
+      "job_name": "Office notebooks",
+      "vendor_name": "ABC Company",
+      "status": "pending",
+      "created_at": "2026-09-29T07:00:00.000Z",
+      "total_amount": 44000
+    }
+  ],
+  "pagination": {
+    "page": 1,
+    "limit": 20,
+    "total": 1,
+    "total_pages": 1
+  }
+}
+```
+
+หากไม่พบรายการ `data` จะเป็น `[]` และ `pagination.total` กับ `pagination.total_pages` จะเป็น `0`
+
+Errors สำคัญ:
+
+- `400` เมื่อ `status` ไม่ใช่ค่าที่รองรับ
+- `400` เมื่อ `page` ไม่ใช่จำนวนเต็มบวก
+- `400` เมื่อ `limit` อยู่นอกช่วง 1–100
+- `401` เมื่อไม่มี token หรือ token ไม่ถูกต้อง
+- `500` เมื่ออ่านข้อมูลจากฐานข้อมูลไม่สำเร็จ
 
 ### `POST /api/pr`
 
