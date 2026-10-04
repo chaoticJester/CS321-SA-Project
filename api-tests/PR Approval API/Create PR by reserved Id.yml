@@ -1,0 +1,35 @@
+info:
+  name: Create PR by reserved Id
+  type: http
+  seq: 19
+
+http:
+  method: POST
+  url: "{{baseUrl}}/api/pr"
+  headers:
+    - name: Authorization
+      value: Bearer {{token}}
+  body:
+    type: json
+    data: |-
+      {
+        "reservation_id": "<reserved_id>",
+        "require_date": "2026-10-10",
+        "job_name": "ทดสอบ API จองเลข PR",
+        "items": [
+          {
+            "description": "Monitor",
+            "qty": 1,
+            "unit": "เครื่อง",
+            "unit_price": 5000
+          }
+        ]
+      }
+  auth: inherit
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false
