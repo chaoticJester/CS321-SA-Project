@@ -1,6 +1,9 @@
 import type { Response } from "express";
 import type { AuthedRequest } from "../middlewares/auth.middleware.js";
-import { createPr } from "../services/pr.service.js";
+import {
+  createPr,
+  PrReservationError,
+} from "../services/pr.service.js";
 import { access, unlink } from "node:fs/promises";
 import path from "node:path";
 import type { NextFunction } from "express";
@@ -16,6 +19,8 @@ import {
   canEmployeeAccessPr,
   countPendingPrsByRequester,
 } from "../models/pr.model.js";
+import { reservePrNumber } from "../services/pr-number.service.js";
+
 
 const ALLOWED_STATUSES = new Set<PrStatus>([
   "pending",
@@ -77,6 +82,19 @@ export async function createPrController(
   }
 
   const data = body as Record<string, unknown>;
+
+  const reservationId = data.reservation_id;
+  
+  if (
+    typeof reservationId !== "string" ||
+    !/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+      reservationId,
+    )
+  ) {
+    res.status(400).json({ message: "Invalid reservation_id" });
+    return;
+  }
+  
   const date = typeof data.require_date === "string"
     ? new Date(data.require_date)
     : null;
@@ -147,9 +165,15 @@ export async function createPrController(
   };
 
   try {
-    const prId = await createPr(input);
+    const prId = await createPr(input, reservationId);
     res.status(201).json({ pr_id: prId });
   } catch (error) {
+    if (error instanceof PrReservationError) {
+      res.status(error.statusCode).json({
+        message: error.message,
+      });
+      return;
+    }
     console.error("Failed to create PR:", error);
     res.status(500).json({ message: "Failed to create PR" });
   }
@@ -407,6 +431,28 @@ export async function downloadPrAttachment(
 
     res.status(500).json({
       message: "Internal server error",
+    });
+  }
+}
+
+export async function reservePrNumberController(
+  req: AuthedRequest,
+  res: Response,
+): Promise<void> {
+  if (!req.user) {
+    res.status(401).json({ message: "Unauthorized" });
+    return;
+  }
+
+  try {
+    const reservation = await reservePrNumber(req.user.sub);
+
+    res.status(201).json(reservation);
+  } catch (error) {
+    console.error("Failed to reserve PR number:", error);
+
+    res.status(500).json({
+      message: "Failed to reserve PR number",
     });
   }
 }
