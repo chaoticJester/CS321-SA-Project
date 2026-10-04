@@ -4,6 +4,7 @@
 .notification-bell { display: block; width: 20px; height: 20px; }
 .notification-count { position: absolute; top: 0; right: 0; display: grid; place-items: center; min-width: 18px; height: 18px; padding: 0 3px; border: 2px solid #e7ebef; border-radius: 999px; background: #b4423e; color: white; font-family: Inter, sans-serif; font-size: 9px; font-weight: 700; line-height: 1; font-variant-numeric: tabular-nums; pointer-events: none; }
 .approver-header .notification-count { border-color: #f7f6f1; }
+.requester-header, .approver-header { position: relative; z-index: 20; }
 .dashboard-design { color: #222a2d; }
 .dashboard-queue { padding: 30px 32px 18px; border-radius: 18px; background: #2c3f68; color: white; }
 .dashboard-queue-heading { display: flex; justify-content: space-between; gap: 24px; padding-bottom: 26px; }

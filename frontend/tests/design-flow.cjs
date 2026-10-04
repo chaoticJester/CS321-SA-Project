@@ -149,6 +149,7 @@ async function main() {
     await page.getByRole('dialog', { name: 'ส่งคำขอสำเร็จ' }).waitFor(); await capture('submit-success')
     await page.getByRole('button', { name: '→ ติดตามคำขอ', exact: true }).click()
     assert.match(await page.getByRole('heading', { name: 'IT-027-PR', exact: true }).innerText(), /IT-027-PR/)
+    await page.getByRole('button', { name: 'Profile', exact: true }).click()
     await page.getByRole('button', { name: 'Log out', exact: true }).click(); await login('E0018')
     await page.locator('.dashboard-queue-row').first().waitFor(); await capture('approver-dashboard')
     await page.getByRole('button', { name: /รายการที่รออนุมัติ/ }).click()
