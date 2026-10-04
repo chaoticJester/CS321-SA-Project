@@ -51,6 +51,8 @@ export interface PrListItem {
   requester_id: string;
   require_date: Date;
   job_name: string | null;
+  purpose: string | null;
+  asset_type: string | null;
   vendor_name: string | null;
   status: PrStatus;
   created_at: Date;

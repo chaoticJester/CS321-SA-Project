@@ -17,7 +17,7 @@ import {
   findPrsByRequester,
   findAttachmentById,
   canEmployeeAccessPr,
-  countPendingPrsByRequester,
+  countPrsByRequester,
 } from "../models/pr.model.js";
 import { reservePrNumber } from "../services/pr-number.service.js";
 
@@ -325,7 +325,7 @@ export async function getMyNotificationCount(
   }
 
   try {
-    const count = await countPendingPrsByRequester(req.user.sub);
+    const count = await countPrsByRequester(req.user.sub);
     res.status(200).json({ count });
   } catch (error) {
     console.error("Failed to count notifications:", error);

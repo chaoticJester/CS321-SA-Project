@@ -13,6 +13,7 @@ export type Requisition = {
   attachmentInfo: AttachmentInfo;
   remark: string; step: number; createdAt: string; reference?: string;
   backendId?: string; status?: 'pending' | 'approved' | 'rejected'; approval?: import('./api').ApprovalStatus;
+  requester?: import('./api').Employee;
 }
 export const BUDGET = 130000
 export const DRAFT_KEY = 'current-draft'
@@ -22,7 +23,7 @@ export function emptyItem(): Item {
 export function newRequisition(): Requisition {
   return { basic: { job: '', mainGroup: '', budgetType: '', requiredDate: '', budgetCode: '', purpose: '', line: '', description: '', currency: 'THB' }, items: [emptyItem()], attachments: [], attachmentInfo: { documentType: '', documentNo: '', documentDate: '' }, purchaser: '', remark: '', step: 1, createdAt: new Date().toISOString() }
 }
-export const activeItems = (items: Item[]) => items.filter(item => Object.entries(item).some(([key, value]) => key !== 'id' && value.trim()))
+export const activeItems = (items: Item[]) => items.filter(item => Object.entries(item).some(([key, value]) => key !== 'id' && key !== 'budgetCode' && value.trim()))
 export const money = (value: number) => value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 export function numericValue(value: string) {
   const normalized = value.trim().replaceAll(',', '')

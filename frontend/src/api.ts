@@ -46,6 +46,7 @@ type ApiPr = {
   created_at: string
   total_amount: number
   items: Array<{ item_id: string; description: string; qty: number; unit: string | null; unit_price: string }>
+  attachments?: Array<{ attachment_id: string; file_type: string; file_path: string }>
 }
 
 export type PendingApproval = {
@@ -56,6 +57,15 @@ export type PendingApproval = {
   requester_name: string
   created_at: string
   total_amount: number | string
+  require_date?: string
+  requester_department?: string | null
+  asset_type?: string | null
+}
+
+export type ApprovalHistoryItem = PendingApproval & {
+  decision: 'approved' | 'rejected'
+  comment: string | null
+  approved_at: string
 }
 
 export function getSession(): Session | null {
@@ -133,24 +143,53 @@ export async function getPr(prId: string): Promise<Requisition> {
     request<ApiPr>(`/pr/${encodeURIComponent(prId)}`),
     request<ApprovalStatus>(`/pr/${encodeURIComponent(prId)}/status`),
   ])
-  return toRequisition(pr, approval)
+  const value = toRequisition(pr, approval)
+  const [requester, attachments] = await Promise.all([
+    request<Employee>(`/employees/${encodeURIComponent(pr.requester_id)}`),
+    Promise.all((pr.attachments || []).map(async attachment => {
+      const session = getSession()
+      const response = await fetch(`${API_BASE}/pr/${encodeURIComponent(prId)}/attachments/${encodeURIComponent(attachment.attachment_id)}/download`, { headers: session ? { Authorization: `Bearer ${session.token}` } : {} })
+      if (!response.ok) throw new Error('ไม่สามารถโหลดเอกสารแนบได้')
+      const blob = await response.blob()
+      return { id: attachment.attachment_id, file: new File([blob], attachment.file_path, { type: attachment.file_type }) }
+    })),
+  ])
+  return { ...value, requester, attachments }
 }
 
-export async function listMyPrs(): Promise<Requisition[]> {
+async function listMyPrRows(statuses: ApiPr['status'][] = []) {
   type PrListResponse = {
     data: Array<Omit<ApiPr, 'items'> & { items?: ApiPr['items'] }>
     pagination: { page: number; limit: number; total: number; total_pages: number }
   }
 
-  const firstPage = await request<PrListResponse>('/pr?limit=100')
+  const params = new URLSearchParams({ limit: '100' })
+  if (statuses.length) params.set('status', statuses.join(','))
+  const firstPage = await request<PrListResponse>(`/pr?${params}`)
   const remainingPages = await Promise.all(
     Array.from({ length: Math.max(0, firstPage.pagination.total_pages - 1) }, (_, index) =>
-      request<PrListResponse>(`/pr?page=${index + 2}&limit=100`),
+      request<PrListResponse>(`/pr?${params}&page=${index + 2}`),
     ),
   )
-  const rows = [firstPage, ...remainingPages].flatMap(result => result.data)
+  return [firstPage, ...remainingPages].flatMap(result => result.data)
+}
 
-  return Promise.all(rows.map(row => getPr(row.pr_id)))
+// The table needs only the list response; do not download every PR's attachments.
+export async function listMyPrSummaries(statuses: ApiPr['status'][] = []): Promise<Requisition[]> {
+  const rows = await listMyPrRows(statuses)
+  return rows.map(row => toRequisition({ ...row, items: [] }))
+}
+
+export async function listMyPrs(): Promise<Requisition[]> {
+  const rows = await listMyPrRows()
+  return Promise.all(rows.map(async row => {
+    const approval = await getPrApproval(row.pr_id)
+    return toRequisition({ ...row, items: [] }, approval)
+  }))
+}
+
+export function getPrApproval(prId: string) {
+  return request<ApprovalStatus>(`/pr/${encodeURIComponent(prId)}/status`)
 }
 
 export async function getMyNotificationCount(): Promise<number> {
@@ -188,6 +227,10 @@ export async function createPr(value: Requisition): Promise<Requisition> {
 
 export function getPendingApprovals(employeeId: string) {
   return request<PendingApproval[]>(`/employees/${encodeURIComponent(employeeId)}/pending-approvals`)
+}
+
+export function getApprovalHistory(employeeId: string) {
+  return request<ApprovalHistoryItem[]>(`/employees/${encodeURIComponent(employeeId)}/approval-history`)
 }
 
 export function approvePr(prId: string, passcode: string) {

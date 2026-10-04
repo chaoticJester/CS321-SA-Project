@@ -17,6 +17,8 @@ interface PrListDbRow extends RowDataPacket {
   requester_id: string;
   require_date: Date;
   job_name: string | null;
+  purpose: string | null;
+  asset_type: string | null;
   vendor_name: string | null;
   status: PrStatus;
   created_at: Date;
@@ -207,6 +209,8 @@ export async function findPrsByRequester(
         pr.requester_id,
         pr.require_date,
         pr.job_name,
+        pr.purpose,
+        pr.asset_type,
         pr.vendor_name,
         pr.status,
         pr.created_at,
@@ -233,14 +237,13 @@ export async function findPrsByRequester(
   };
 }
 
-export async function countPendingPrsByRequester(
+export async function countPrsByRequester(
   requesterId: string,
 ): Promise<number> {
   const [rows] = await pool.query<CountRow[]>(
     `SELECT COUNT(*) AS total
      FROM pr
-     WHERE requester_id = ?
-       AND status = 'pending'`,
+     WHERE requester_id = ?`,
     [requesterId],
   );
 
