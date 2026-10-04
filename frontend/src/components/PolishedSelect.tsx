@@ -19,7 +19,7 @@ type PolishedSelectProps = {
 
 type MenuPosition = { top?: number; bottom?: number; left: number; width: number; maxHeight: number }
 
-export function PolishedSelect({ value, options, onChange, ariaLabel, placeholder = '<กรุณาเลือก / Please select>', disabled = false, required = false, numbered = false, compact = false, wide = false, id }: PolishedSelectProps) {
+export function PolishedSelect({ value, options, onChange, ariaLabel, placeholder = '<กรุณาเลือก>', disabled = false, required = false, numbered = false, compact = false, wide = false, id }: PolishedSelectProps) {
   const [open, setOpen] = useState(false)
   const [menuPosition, setMenuPosition] = useState<MenuPosition | null>(null)
   const rootRef = useRef<HTMLDivElement>(null)

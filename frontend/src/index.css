@@ -7,12 +7,20 @@
 @import '@fontsource/bai-jamjuree/600.css';
 @import '@fontsource/bai-jamjuree/700.css';
 @import '@fontsource/noto-sans-thai/400.css';
+@import '@fontsource/noto-sans-thai/500.css';
 @import '@fontsource/noto-sans-thai/600.css';
 @import '@fontsource/noto-sans-thai/700.css';
 @import '@fontsource/sarabun/600.css';
+@import '@fontsource/sarabun/700.css';
+@import '@fontsource/inter/400.css';
+@import '@fontsource/inter/500.css';
+@import '@fontsource/inter/600.css';
+@import '@fontsource/inter/700.css';
+@import '@fontsource/noto-serif-thai/700.css';
 
 :root { font-family: 'Bai Jamjuree', 'Noto Sans Thai', sans-serif; color: #31456c; background: #fff; font-synthesis: none; text-rendering: optimizeLegibility; -webkit-font-smoothing: antialiased; --accent: #4f6fae; --ink: #31456c; --auth-ink: #17414d; --surface: #f7f6f1; --line: #d7d7d7; --danger: #b4423e; }
 * { box-sizing: border-box; }
+html { scrollbar-gutter: stable; }
 body { margin: 0; min-width: 320px; }
 button, input, select, textarea { font: inherit; }
 button { cursor: pointer; }
@@ -21,7 +29,44 @@ button, input, select, textarea { -webkit-tap-highlight-color: transparent; }
 :focus-visible { outline: 3px solid #a6b9df; outline-offset: 3px; }
 input, select, textarea { min-width: 0; color: inherit; }
 h1, h2, h3, p { margin: 0; }
-button { color: inherit; }
+@layer base { button { color: inherit; } }
+
+@keyframes approver-page-enter {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes approver-rise {
+  from { opacity: 0; transform: translateY(16px) scale(.985); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+@keyframes approver-pop {
+  from { opacity: 0; transform: translateY(-8px) scale(.96); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+@keyframes approver-notice-pop {
+  from { opacity: 0; transform: translateX(-50%) translateY(-8px) scale(.96); }
+  to { opacity: 1; transform: translateX(-50%) translateY(0) scale(1); }
+}
+@keyframes approver-badge-pulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.14); }
+}
+.approver-page { animation: approver-page-enter .34s cubic-bezier(.22, 1, .36, 1) both; }
+.approver-rise { animation: approver-rise .42s cubic-bezier(.22, 1, .36, 1) both; }
+.approver-row { animation: approver-rise .34s cubic-bezier(.22, 1, .36, 1) both; }
+.approver-notice { animation: approver-notice-pop .2s ease-out both; transform-origin: top center; }
+.approver-menu { animation: approver-pop .2s ease-out both; transform-origin: top right; }
+.approver-header { animation: approver-pop .28s ease-out both; }
+.approver-header button, .approver-action { transition: transform .16s ease, background-color .16s ease, box-shadow .16s ease; }
+.approver-header button:hover, .approver-action:hover:not(:disabled) { transform: translateY(-1px); }
+.approver-header button:active, .approver-action:active:not(:disabled) { transform: translateY(0) scale(.98); }
+.approver-badge { animation: approver-badge-pulse 1.8s ease-in-out infinite; }
+.approver-status { transition: transform .16s ease, box-shadow .16s ease; }
+.approver-status:hover { transform: translateY(-1px); box-shadow: 0 4px 12px #31456c14; }
+@media (prefers-reduced-motion: reduce) {
+  .approver-page, .approver-rise, .approver-row, .approver-notice, .approver-menu, .approver-header, .approver-badge { animation: none !important; }
+  .approver-header button, .approver-action, .approver-status { transition: none !important; }
+}
 input, select, textarea { border: 1px solid #c4c4c4; border-radius: 6px; background: #fff; }
 input, select { height: 34px; padding: 5px 10px; }
 textarea { padding: 20px; resize: vertical; line-height: 1.6; }

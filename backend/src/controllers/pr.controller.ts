@@ -14,7 +14,7 @@ import {
   findPrsByRequester,
   findAttachmentById,
   canEmployeeAccessPr,
-  countPendingPrsByRequester,
+  countPrsByRequester,
 } from "../models/pr.model.js";
 
 const ALLOWED_STATUSES = new Set<PrStatus>([
@@ -301,7 +301,7 @@ export async function getMyNotificationCount(
   }
 
   try {
-    const count = await countPendingPrsByRequester(req.user.sub);
+    const count = await countPrsByRequester(req.user.sub);
     res.status(200).json({ count });
   } catch (error) {
     console.error("Failed to count notifications:", error);

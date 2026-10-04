@@ -1,10 +1,10 @@
 # SA Project — Final Prototype
 
-React, TypeScript, and Vite implementation of the [Final Prototype page in Figma](https://www.figma.com/design/zD2Rs5mCWypWJG0htNpgn6/SA-Project-13?node-id=272-495).
+React and TypeScript implementation of the [Figma Final Prototype](https://www.figma.com/design/zD2Rs5mCWypWJG0htNpgn6/SA-Project-13?node-id=272-495).
 
 ## Run
 
-Use Node.js 24 or newer (the unit tests use Node's built-in TypeScript support).
+Start the MySQL-backed API using the setup in [backend README](../backend/README.md). Then:
 
 ```sh
 cd frontend
@@ -12,55 +12,31 @@ npm install
 npm run dev
 ```
 
-Open the local URL printed by Vite. Sign in using either:
+Vite proxies `/api` to `http://localhost:3000`. Set `VITE_API_URL` to use another API address. Sign in with an employee ID and passcode from the database. The employee's approval level determines the requester or approver view.
 
-- Employee ID: `EMP-104882`
-- Company email: `somchai.k@company.co.th`
-- Password for either method: `Demo@123`
+## Screens
 
-The **Demo access** disclosure on the login screen also shows these credentials. Any other credentials display the incorrect-password state. A successful sign-in displays the loading state before opening the PR form.
+- Authentication: employee ID, email, incorrect password, submitting, and forgot password.
+- Requester: home with **pending PRs only**, all four create steps, draft and submitted PDF previews, submission confirmation, My Requests, history, request detail, and notifications.
+- Approver: dashboard, pending/all requests, approval history, review, electronic signature and success state, read-only request detail, and notifications.
 
-## Implemented screens
+Navigation, status/month/search filters, pagination, attachment upload/download, submission tracking, and approval decisions are connected to the existing application flows. The implementation removes the earlier demo disclosure, invented signup form, account menus, extra attachment fields, and cancel confirmation.
 
-| Figma frame | Node | Application behavior |
-| --- | --- | --- |
-| Login - 1 | 277:2111 | Employee-ID sign-in |
-| Login - 2 | 277:2138 | Company-email sign-in |
-| Login - Wrong password | 277:2221 | Invalid-credential feedback |
-| Login - Submitting | 277:2246 | Loading state after successful demo sign-in |
-| Login - Forget password | 277:2267 | Reset request form with explicit demo result |
-| Landing page - Requester | 419:1665 | Requester home, examples, search, and create action |
-| Create PR-1 | 384:6213 | Basic information and required-field validation |
-| Create PR-2 (Default) | 384:6385 | Empty item editor |
-| Create PR-2 (Add Item) | 384:6554 | Live quantity × unit-price totals, add/edit/remove rows, amount words, remarks |
-| Create PR-3 | 384:7471 | Drop or select JPG/PNG/PDF files, remove/download files, select purchaser |
-| Create PR-4 | 384:6925 | Budget control, summary, document preview, submission |
-| PR - Submit State | 418:1282 | Submission confirmation and next approver |
-| My Requests | 423:1641 | Active/all request filters and locally submitted requests |
-| PR History | 426:2575 | Request history table |
-| View PR Detail | 442:3176 | Request, item-total, attachment, and approval detail |
-| Landing page - Approver | 367:2835 | Approval queue and dashboard summary |
+My Requests loads all pages of the authenticated `GET /api/pr` list directly. Full items, approval status, requester information, and attachments are fetched when a PR is opened, so an unavailable detail or attachment does not hide the list. Budget Code displays `—` where the backend has no stored code.
 
-The sign-up button opens a small request-access form because the design contains that action but no destination frame. Cancel has a confirmation dialog. The PDF action opens a printable document; use the browser's **Save as PDF** option.
+All, In process, and History share the same requester list and counts. History loads approval timestamps and comments separately without downloading attachments. Switching tabs retains consistent positions, reserves scrollbar space, and uses fixed table columns; list pages fade in without moving their headings, tabs, or columns.
 
-## Data and integration boundaries
+Requester home uses `GET /api/pr?limit=100&status=pending` and preserves the status filter across backend pages. Cards do not load detail or attachment endpoints. Opening a PDF preview fetches that PR's full data; a preview failure leaves the pending cards visible.
 
-This is a functional **local frontend prototype**, not a production procurement system. The frontend demo flow is not yet connected to the repository's backend services.
+## Data boundaries
 
-- Authentication uses fixed demo credentials; it does not establish a secure server session. Passwords are not persisted.
-- Reset/sign-up requests do not send email or create an account.
-- **Save Draft** stores the current form and actual attachment bytes in IndexedDB on the current browser/origin. Sign in again to restore it. Unsaved changes show the browser's leave-page warning.
-- **Submit** validates the form, stores a completed record locally with a generated PR reference, and clears the saved draft in the same transaction. It does not contact an approver. The success dialog explicitly explains this.
-- The budget is a demo balance of **130,000 THB**, matching the budget-control table. Both review panels use the same calculated balance; the contradictory static Figma examples (52 versus 57,000 THB) are replaced by the actual line-item total.
-- Available dropdown choices and requester details are demo fixtures. Only THB is supported; no currency conversion is performed.
-- Each attachment must be nonempty, JPG/PNG/PDF, and at most 5 MB. Browser storage quota may limit the total; failed writes retain the open form and show an error.
-- Server authentication, authorization, employee/vendor/budget APIs, file security scanning, approval routing, and email require a backend before production use.
+Employee-ID login, PR submission, attachments, approval status, pending approvals, and approval history use the backend. Approval history is exposed through `GET /api/employees/:id/approval-history`, restricted to the authenticated employee.
 
-## Design assets and styling
+Email login, password-reset email, and account registration have no corresponding backend service. Their Figma UI is retained without inventing destination pages. Notifications are derived from available PR and approval records; read markers are stored per employee in localStorage. The bell shows only unread items and hides its badge at zero. Reading an item or marking all read updates the bell immediately, including in other tabs. A new PR status creates a new unread notification. Read markers persist on this browser; they are not synchronized across devices. Dashboard figures reflect records available to the signed-in approver.
 
-Reusable React components live in `src/components`. Shared validation/calculation/persistence functions live in `src/model.ts`. Styling combines shared CSS with Tailwind utility classes and responsive layouts.
+Drafts and attachment bytes are stored in IndexedDB. Dropdown choices and the 130,000 THB budget balance remain local form fixtures because there is no budget catalog endpoint. Fields unsupported by the backend schema, such as budget code and separate item brand/model, are retained while editing but are not stored as separate database fields.
 
-Figma-exported icons are saved in `public/figma` so the app does not depend on expiring asset URLs. Bai Jamjuree, Noto Sans Thai, and Sarabun fonts are bundled locally through Fontsource. PR layouts reproduce the upright Figma screenshots instead of copying the source nodes' rotated absolute positioning.
+PDF preview panels reproduce the blank document canvas in Figma. Download/print opens the actual requisition through the browser print dialog, which supports Save as PDF.
 
 ## Verify
 
@@ -68,3 +44,23 @@ Figma-exported icons are saved in `public/figma` so the app does not depend on e
 npm run build
 npm run lint
 ```
+
+`tests/design-flow.cjs` exercises 26 browser states with deterministic mocked API responses, including requester pending-only cards, submission tracking, invalid/valid signature passcodes, notification read state, and mobile layout. It does not change the database.
+
+With Playwright available and the Vite server running:
+
+```sh
+node tests/design-flow.cjs
+```
+
+Optional environment variables: `PLAYWRIGHT_MODULE` for a Playwright module path, `CHROME_PATH` for an installed Chrome executable, and `VERIFY_OUTPUT` for screenshots. These browser checks validate frontend flows; they do not verify a live MySQL connection.
+
+`node tests/my-requests.cjs` additionally checks authenticated list requests, multiple backend pages, loading details on demand, and API failures. Set `LIVE_API=1` to compare My Requests with the live backend and database without modifying PRs. This uses seeded requester `E0020` and passcode `123456` by default; override them with `TEST_EMPLOYEE_ID` and `TEST_PASSCODE` for another test account.
+
+`node tests/requester-home.cjs` checks pending-only backend cards, pagination, loading previews on demand, and isolation from missing attachment files. `LIVE_API=1` verifies those cards against the live database using the same test-account settings.
+
+`node tests/notifications.cjs` checks both roles' unread badges, reading one/all items, reload persistence, new statuses, cross-tab updates, legacy read markers, malformed storage, mobile layout, and reduced motion. The design-flow checks also verify that all 26 captured states have animation coverage. Page, card, row, dialog, and badge animations respect `prefers-reduced-motion` and are disabled for printing.
+
+`node tests/request-detail.cjs` checks the request summary's Thai date, quantity-only display, line totals, grand total, comma-formatted prices, decimal rounding, and mobile layout. Amounts use the same calculation helpers as the PR form.
+
+`node tests/date-picker.cjs` checks the styled Require Date calendar, direct date entry, month and keyboard navigation, leap years, Today/Clear actions, Escape and outside-click dismissal, required validation, mobile placement, and reduced motion. The selected value remains an ISO date for drafts and API submission.
