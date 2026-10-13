@@ -10,6 +10,7 @@ import {
   addPrAttachment,
   downloadPrAttachment,
   getMyNotificationCount,
+  reservePrNumberController,
 } from "../controllers/pr.controller.js";
 
 
@@ -17,6 +18,11 @@ const router = Router();
 
 router.get("/", authMiddleware, listMyPrs);
 router.post("/", authMiddleware, createPrController);
+router.post(
+  "/number-reservations",
+  authMiddleware,
+  reservePrNumberController,
+);
 router.get("/notification-count", authMiddleware, getMyNotificationCount);
 router.get(
   "/:id/attachments/:attachmentId/download",
