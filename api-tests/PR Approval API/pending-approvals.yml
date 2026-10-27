@@ -5,7 +5,7 @@ info:
 
 http:
   method: GET
-  url: "{{baseUrl}}/api/employees/SC001/pending-approvals"
+  url: "{{baseUrl}}/api/employees/E0015/pending-approvals"
   headers:
     - name: Authorization
       value: Bearer {{token}}
