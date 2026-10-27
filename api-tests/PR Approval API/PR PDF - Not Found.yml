@@ -1,0 +1,27 @@
+info:
+  name: PR PDF - Not Found
+  type: http
+  seq: 21
+
+http:
+  method: GET
+  url: "{{baseUrl}}/api/pr/NONEXIST/pdf"
+  headers:
+    - name: Authorization
+      value: Bearer {{token}}
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: tests
+      code: |-
+        test("returns 404", function () {
+          expect(res.getStatus()).to.equal(404);
+        });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

@@ -1,0 +1,39 @@
+info:
+  name: PR PDF
+  type: http
+  seq: 20
+
+http:
+  method: GET
+  url: "{{baseUrl}}/api/pr/{{prId}}/pdf"
+  headers:
+    - name: Authorization
+      value: Bearer {{token}}
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: tests
+      code: |-
+        test("returns 200", function () {
+          expect(res.getStatus()).to.equal(200);
+        });
+
+        test("response is a PDF", function () {
+          expect(res.getHeader("content-type")).to.include("application/pdf");
+        });
+
+        test("shown inline in the browser", function () {
+          expect(res.getHeader("content-disposition")).to.include("inline");
+        });
+
+        test("is never cached", function () {
+          expect(res.getHeader("cache-control")).to.include("no-store");
+        });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

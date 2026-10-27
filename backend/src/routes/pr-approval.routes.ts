@@ -6,6 +6,7 @@ import {
   rejectPrController,
   getPrStatusController,
 } from "../controllers/pr-approval.controller";
+import { getPrPdfController } from "../controllers/pdf.controller";
 
 const router = Router();
 
@@ -17,6 +18,9 @@ router.post("/:id/approve", authMiddleware, verifyPasscode, approvePrController)
 
 // POST /api/pr/:id/reject
 router.post("/:id/reject", authMiddleware, rejectPrController);
+
+// GET /api/pr/:id/pdf  (?download=1 to save as a file)
+router.get("/:id/pdf", authMiddleware, getPrPdfController);
 
 
 

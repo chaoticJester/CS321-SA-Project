@@ -6,7 +6,7 @@ import { findEmployeeById } from "../models/employee.model";
 import { findApprovalStepsWithSignature } from "../models/prApprovalLog.model";
 import type { ApprovalStepWithSignature } from "../types/approval";
 import type { PrPdfData } from "../types/pdf";
-import type { PrStatus } from "../types/pr";
+import type { PrStatus, PrWithItems } from "../types/pr";
 import { englishBahtText, thaiBahtText } from "../utils/amountInWords";
 import {
   FONT,
@@ -516,15 +516,13 @@ export function renderPrPdf(data: PrPdfData): Promise<Buffer> {
   });
 }
 
-// Load everything the PDF needs. Returns null when the PR does not exist.
-export async function buildPrPdfData(prId: string): Promise<PrPdfData | null> {
-  const pr = await findPrById(prId);
-  if (!pr) return null;
-
+// Load everything else the PDF needs for an already-loaded PR.
+// (Callers usually have the PR already, e.g. to check it exists first.)
+export async function buildPrPdfData(pr: PrWithItems): Promise<PrPdfData> {
   const [employee, approvals] = await Promise.all([
     findEmployeeById(pr.requester_id),
     // Same rows and order as GET /api/pr/:id/status, so PDF and website match.
-    findApprovalStepsWithSignature(prId),
+    findApprovalStepsWithSignature(pr.pr_id),
   ]);
 
   return {
@@ -552,7 +550,8 @@ export async function buildPrPdfData(prId: string): Promise<PrPdfData | null> {
   };
 }
 
+// Convenience for scripts: load the PR and render it. Returns null when the PR does not exist.
 export async function generatePrPdf(prId: string): Promise<Buffer | null> {
-  const data = await buildPrPdfData(prId);
-  return data ? renderPrPdf(data) : null;
+  const pr = await findPrById(prId);
+  return pr ? renderPrPdf(await buildPrPdfData(pr)) : null;
 }
