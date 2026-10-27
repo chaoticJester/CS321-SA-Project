@@ -2,12 +2,16 @@ import fs from "fs";
 import os from "os";
 import path from "path";
 import { generatePrPdf, renderPrPdf } from "../services/pdf.service";
+import type { ApprovalAction, ApprovalStepWithSignature } from "../types/approval";
 import type { PrPdfData } from "../types/pdf";
+import type { PrStatus } from "../types/pr";
 import type { PrItemRow } from "../types/pr";
 
 // Render a PR document to a PDF file so the layout can be checked by eye.
 //
-//   npx tsx src/scripts/try-pdf.ts           sample data (no DB needed)
+//   npx tsx src/scripts/try-pdf.ts           sample data, waiting for the 2nd approver (no DB needed)
+//   npx tsx src/scripts/try-pdf.ts approved  sample data, fully approved (all signatures)
+//   npx tsx src/scripts/try-pdf.ts rejected  sample data, rejected at the 3rd approver
 //   npx tsx src/scripts/try-pdf.ts long      sample data with many items (page breaks)
 //   npx tsx src/scripts/try-pdf.ts PR0001    real PR from the database
 
@@ -24,7 +28,43 @@ const SAMPLE_ITEMS: PrItemRow[] = [
   },
 ];
 
-function sampleData(itemCount: number): PrPdfData {
+type Scenario = "pending" | "approved" | "rejected";
+
+// Approvers from seed_data.sql (signature files in assets/signatures).
+const SAMPLE_APPROVERS = [
+  { level: "Senior Chief", id: "E0018", name: "Mr. B" },
+  { level: "Manager", id: "E0017", name: "Mr. C" },
+  { level: "Deputy General Manager", id: "E0015", name: "Mr. D" },
+  { level: "General Manager", id: "E0010", name: "Mr. E" },
+];
+
+function sampleApprovals(scenario: Scenario): ApprovalStepWithSignature[] {
+  const statuses: Record<Scenario, ApprovalAction[]> = {
+    pending: ["approved", "pending", "pending", "pending"],
+    approved: ["approved", "approved", "approved", "approved"],
+    rejected: ["approved", "approved", "rejected", "cancelled"],
+  };
+
+  return SAMPLE_APPROVERS.map((approver, i) => {
+    const status = statuses[scenario][i]!;
+    const done = status === "approved" || status === "rejected";
+    return {
+      sequence_order: i + 1,
+      level_name: approver.level,
+      approver_id: approver.id,
+      approver_name: approver.name,
+      position: approver.level,
+      department: "IT Department",
+      status,
+      comment: status === "rejected" ? "ราคาสูงกว่างบประมาณที่ตั้งไว้ กรุณาขอใบเสนอราคาเพิ่มอีก 2 ราย & แนบมาใหม่" : null,
+      approved_at: done ? new Date(Date.UTC(2026, 8, 21 + i, 3, 24)) : null,
+      signature_applied: status === "approved",
+      signature_image: `/signatures/${approver.id.toLowerCase()}.png`,
+    };
+  });
+}
+
+function sampleData(itemCount: number, scenario: Scenario = "pending"): PrPdfData {
   const items: PrItemRow[] = [];
   for (let i = 0; i < itemCount; i++) {
     const base = SAMPLE_ITEMS[i % SAMPLE_ITEMS.length]!;
@@ -33,6 +73,8 @@ function sampleData(itemCount: number): PrPdfData {
 
   return {
     company_name: "บริษัทตัวอย่าง จำกัด",
+    generated_at: new Date(),
+    approvals: sampleApprovals(scenario),
     pr: {
       pr_id: "PR-SAMPLE",
       pr_no: "IT-026-PR",
@@ -43,7 +85,7 @@ function sampleData(itemCount: number): PrPdfData {
         "ทดแทนเครื่องเดิมที่ใช้งานมานานกว่าห้าปี เครื่องเดิมทำงานช้าและไม่รองรับซอฟต์แวร์รุ่นใหม่ที่ฝ่ายเทคโนโลยีสารสนเทศต้องใช้ในการพัฒนาระบบภายในองค์กร",
       asset_type: "Office Supply",
       vendor_name: "บริษัท ABC จำกัด",
-      status: "pending",
+      status: scenario as PrStatus,
       created_at: new Date("2026-09-20T09:00:00+07:00"),
       items,
       attachments: [],
@@ -74,6 +116,8 @@ async function main() {
 
   if (!arg || arg === "long") {
     pdf = await renderPrPdf(sampleData(arg === "long" ? 45 : 3));
+  } else if (arg === "approved" || arg === "rejected") {
+    pdf = await renderPrPdf(sampleData(3, arg));
   } else {
     pdf = await generatePrPdf(arg);
     if (!pdf) {

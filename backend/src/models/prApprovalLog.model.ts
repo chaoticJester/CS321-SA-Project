@@ -1,12 +1,15 @@
 import { ResultSetHeader, RowDataPacket } from "mysql2";
 import pool from "../config/db";
-import { ApprovalLogRow, ApprovalStatusStep, PendingLogRow } from "../types/approval";
+import { ApprovalLogRow, ApprovalStatusStep, ApprovalStepWithSignature, PendingLogRow } from "../types/approval";
 import { Queryable } from "../types/db";
 import { PrStatus } from "../types/pr";
 
 interface ApprovalLogDbRow extends RowDataPacket, ApprovalLogRow {}
 interface PendingLogDbRow extends RowDataPacket, PendingLogRow {}
 interface ApprovalStatusDbRow extends RowDataPacket, ApprovalStatusStep {}
+interface ApprovalStepWithSignatureDbRow extends RowDataPacket, Omit<ApprovalStepWithSignature, "signature_applied"> {
+    signature_applied: number | boolean;
+}
 interface PrLockRow extends RowDataPacket {
     pr_id: string;
     status: PrStatus;
@@ -120,4 +123,32 @@ export async function findApprovalStatusByPrId(prId: string, db: Queryable = poo
         [prId]
     );
     return rows;
+}
+
+// Same rows and order as findApprovalStatusByPrId (what the website shows),
+// plus the signature fields the PDF needs. Kept separate so GET /status does
+// not expose signature file paths.
+export async function findApprovalStepsWithSignature(prId: string, db: Queryable = pool): Promise<ApprovalStepWithSignature[]> {
+    const [rows] = await db.query<ApprovalStepWithSignatureDbRow[]>(
+        `SELECT
+            lvl.sequence_order,
+            lvl.level_name,
+            al.approver_id,
+            e.full_name AS approver_name,
+            e.position,
+            e.department,
+            al.job_action AS status,
+            al.comment,
+            al.approved_at,
+            al.signature_applied,
+            e.signature_image
+         FROM approval_log al
+         JOIN approval_level lvl ON lvl.level_id = al.level_id
+         JOIN employee e ON e.employee_id = al.approver_id
+         WHERE al.pr_id = ?
+         ORDER BY lvl.sequence_order ASC`,
+        [prId]
+    );
+    // MySQL BOOLEAN comes back as 0 / 1.
+    return rows.map((row) => ({ ...row, signature_applied: Boolean(row.signature_applied) }));
 }

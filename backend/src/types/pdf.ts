@@ -1,3 +1,4 @@
+import type { ApprovalStepWithSignature } from "./approval";
 import type { PrWithItems } from "./pr";
 
 // Who created the PR, as printed in the document.
@@ -26,7 +27,9 @@ export interface PdfExtraFields {
 // Everything the PDF renderer needs. Built from the DB in pdf.service.
 export interface PrPdfData {
   company_name: string;
+  generated_at: Date;
   pr: PrWithItems;
   requester: PdfRequester;
   extra: PdfExtraFields;
+  approvals: ApprovalStepWithSignature[];
 }

@@ -35,6 +35,12 @@ export interface ApprovalStatusStep {
     approved_at: Date | null;
 }
 
+// An approval step plus the signature fields the PDF needs.
+export interface ApprovalStepWithSignature extends ApprovalStatusStep {
+    signature_applied: boolean;
+    signature_image: string | null;
+}
+
 export interface PrApprovalStatus {
     pr_id: string;
     pr_no: string;

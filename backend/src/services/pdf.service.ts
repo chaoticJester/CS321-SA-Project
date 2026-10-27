@@ -1,7 +1,10 @@
+import fs from "fs";
 import path from "path";
 import PDFDocument from "pdfkit";
 import { findPrById } from "../models/pr.model";
 import { findEmployeeById } from "../models/employee.model";
+import { findApprovalStepsWithSignature } from "../models/prApprovalLog.model";
+import type { ApprovalStepWithSignature } from "../types/approval";
 import type { PrPdfData } from "../types/pdf";
 import type { PrStatus } from "../types/pr";
 import { englishBahtText, thaiBahtText } from "../utils/amountInWords";
@@ -11,19 +14,21 @@ import {
   type TextStyle,
   drawLabelValue,
   drawLine,
+  drawParagraph,
   lineHeight,
   measureText,
   wrapText,
 } from "../utils/pdfText";
 
 // Layout follows the team's design (PR-Overleaf/main.tex):
-// page 1 = request data + item table, page 2 = approval cards (added in the next step).
+// page 1 = request data + item table, page 2 = approval cards (three per row).
 
 type Doc = PDFKit.PDFDocument;
 
 // ---------- design tokens (from main.tex) ----------
 
 const FONT_DIR = path.resolve(__dirname, "../../assets/fonts");
+const SIGNATURE_DIR = path.resolve(__dirname, "../../assets/signatures");
 const MM = 72 / 25.4;
 const MARGIN = 16 * MM;
 
@@ -34,6 +39,7 @@ const COLOR = {
   border: "#CBD3DF",
   muted: "#667085",
   approved: "#27724A",
+  rejected: "#B42318",
 };
 
 const BODY: TextStyle = { size: 11, color: COLOR.text };
@@ -64,6 +70,26 @@ const dateFormat = new Intl.DateTimeFormat("en-GB", {
   year: "numeric",
   timeZone: "Asia/Bangkok",
 });
+
+// "21 ก.ย. 2569 10:24" (Thai month, Buddhist year), like the design's approval cards.
+const thaiDateTimeFormat = new Intl.DateTimeFormat("th-TH-u-nu-latn", {
+  day: "numeric",
+  month: "short",
+  year: "numeric",
+  hour: "2-digit",
+  minute: "2-digit",
+  hourCycle: "h23",
+  timeZone: "Asia/Bangkok",
+});
+
+function formatThaiDateTime(value: Date | string | null | undefined): string {
+  if (!value) return "-";
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return "-";
+  const part = (type: Intl.DateTimeFormatPartTypes) =>
+    thaiDateTimeFormat.formatToParts(date).find((p) => p.type === type)?.value ?? "";
+  return `${part("day")} ${part("month")} ${part("year")} ${part("hour")}:${part("minute")}`;
+}
 
 function formatDate(value: Date | string | null | undefined): string {
   if (!value) return "-";
@@ -307,6 +333,151 @@ function drawFooters(doc: Doc, data: PrPdfData): void {
   }
 }
 
+// ---------- page 2: approval cards ----------
+
+interface CardStatus {
+  text: string;
+  color: string;
+}
+
+// Same wording as the website's approval chain.
+function cardStatus(step: ApprovalStepWithSignature, steps: ApprovalStepWithSignature[]): CardStatus {
+  switch (step.status) {
+    case "approved":
+      return { text: "อนุมัติแล้ว", color: COLOR.approved };
+    case "rejected":
+      return { text: "ไม่อนุมัติ", color: COLOR.rejected };
+    case "cancelled":
+      return { text: "ยกเลิก", color: COLOR.muted };
+    default: {
+      const current = steps.find((s) => s.status === "pending");
+      return current === step
+        ? { text: "รอการอนุมัติ", color: COLOR.text }
+        : { text: "รอถึงลำดับ", color: COLOR.text };
+    }
+  }
+}
+
+// signature_image is stored like "/signatures/e0018.png". Only the file name is
+// used, so a bad value can never point outside assets/signatures.
+function signatureFile(step: ApprovalStepWithSignature): string | null {
+  if (step.status !== "approved" || !step.signature_applied || !step.signature_image) return null;
+  const file = path.join(SIGNATURE_DIR, path.basename(step.signature_image));
+  return fs.existsSync(file) ? file : null;
+}
+
+const CARD_HEIGHT = 57 * MM + 6;
+const CARD_GAP = 4 * MM;
+const CARD_PAD = 3 + 1 * MM;
+
+function drawApprovalCard(
+  doc: Doc,
+  step: ApprovalStepWithSignature,
+  steps: ApprovalStepWithSignature[],
+  x: number,
+  y: number,
+  width: number,
+): void {
+  doc.lineWidth(0.5).rect(x, y, width, CARD_HEIGHT).stroke(COLOR.border);
+
+  const innerX = x + CARD_PAD;
+  const innerW = width - CARD_PAD * 2;
+
+  // Top: "1. Senior Chief", then the status (and the reason, if any).
+  const titleStyle: TextStyle = { size: 9.5, bold: true, color: COLOR.brand };
+  let ty = drawParagraph(doc, `${step.sequence_order}. ${step.level_name}`, innerX, y + CARD_PAD, innerW, titleStyle);
+  ty += 2 * MM;
+
+  const status = cardStatus(step, steps);
+  ty = drawParagraph(doc, status.text, innerX, ty, innerW, { size: 10, color: status.color });
+
+  if (step.comment && step.comment.trim()) {
+    const label = step.status === "rejected" ? "เหตุผล" : "หมายเหตุ";
+    const noteStyle: TextStyle = { size: 8.5, color: COLOR.muted };
+    const lines = wrapText(doc, `${label}: ${step.comment.trim()}`, innerW, noteStyle);
+    const shown = lines.slice(0, 3);
+    if (lines.length > 3) shown[2] = `${shown[2]}…`;
+    const lh = lineHeight(doc, noteStyle);
+    shown.forEach((line, i) => drawLine(doc, line, innerX, ty + 2 + i * lh, noteStyle));
+  }
+
+  // Bottom, from the card edge upwards: date, name, rule, signature box.
+  const dateStyle: TextStyle = { size: 8.5, color: COLOR.text };
+  const nameStyle: TextStyle = { size: 9, color: COLOR.text };
+  const dateY = y + CARD_HEIGHT - CARD_PAD - lineHeight(doc, dateStyle);
+  const nameY = dateY - 2 * MM - lineHeight(doc, nameStyle);
+  const ruleY = nameY - 1 * MM;
+  const sigBottom = ruleY - 1 * MM;
+  const sigTop = sigBottom - 13 * MM;
+
+  const signedAt = step.status === "approved" || step.status === "rejected" ? step.approved_at : null;
+  drawLine(doc, formatThaiDateTime(signedAt), innerX, dateY, dateStyle, { width: innerW, align: "center" });
+  drawLine(doc, step.approver_name, innerX, nameY, nameStyle, { width: innerW, align: "center" });
+
+  const ruleW = innerW * 0.9;
+  doc.lineWidth(0.4).moveTo(x + (width - ruleW) / 2, ruleY).lineTo(x + (width + ruleW) / 2, ruleY).stroke(COLOR.border);
+
+  if (step.status === "approved") {
+    const file = signatureFile(step);
+    if (file) {
+      doc.image(file, innerX + innerW * 0.075, sigTop + 0.5 * MM, {
+        fit: [innerW * 0.85, 12 * MM],
+        align: "center",
+        valign: "center",
+      });
+    } else {
+      // Approved but no signature file: same text placeholder as the design.
+      const placeholder: TextStyle = { size: 8, color: COLOR.muted };
+      const py = sigTop + (13 * MM - lineHeight(doc, placeholder)) / 2;
+      drawLine(doc, "(ลายเซ็นอิเล็กทรอนิก)", innerX, py, placeholder, { width: innerW, align: "center" });
+    }
+  }
+}
+
+function drawApprovalPage(doc: Doc, data: PrPdfData): void {
+  const { pr, approvals } = data;
+  const width = contentWidth(doc);
+
+  doc.addPage();
+  let y = MARGIN;
+
+  const titleStyle: TextStyle = { size: 16, bold: true, color: COLOR.brand };
+  drawLine(doc, "การลงนามอนุมัติใบขอซื้อ", MARGIN, y, titleStyle);
+  y += lineHeight(doc, titleStyle) + 2;
+
+  drawLabelValue(doc, "เลขที่ PR", pr.pr_no, MARGIN, y, width / 2, BODY);
+  drawLabelValueRight(doc, "ยอดรวม", `${moneyFormat.format(pr.total_amount)} ${CURRENCY}`, y, BODY);
+  y += lineHeight(doc, BODY);
+
+  y = drawBlockTitle(doc, "ผู้บริหารผู้มีอำนาจอนุมัติตามลำดับ", y);
+  y += 2;
+
+  if (approvals.length === 0) {
+    y = drawFullRow(doc, "สถานะ", "ยังไม่มีข้อมูลผู้อนุมัติ", y);
+  }
+
+  const cardWidth = (width - CARD_GAP * 2) / 3;
+  for (let i = 0; i < approvals.length; i += 3) {
+    y = ensureSpace(doc, y, CARD_HEIGHT);
+    approvals.slice(i, i + 3).forEach((step, col) => {
+      drawApprovalCard(doc, step, approvals, MARGIN + col * (cardWidth + CARD_GAP), y, cardWidth);
+    });
+    y += CARD_HEIGHT + 8;
+  }
+
+  const noteStyle: TextStyle = { size: 8, color: COLOR.muted };
+  y = ensureSpace(doc, y, lineHeight(doc, noteStyle) * 2);
+  drawParagraph(
+    doc,
+    `เอกสารนี้สร้างจากข้อมูลการอนุมัติในระบบ ณ ${formatThaiDateTime(data.generated_at)} ` +
+      "และไม่ใช่เอกสารที่ลงนามด้วยลายมือชื่อดิจิทัล (digital signature)",
+    MARGIN,
+    y,
+    width,
+    noteStyle,
+  );
+}
+
 // ---------- public API ----------
 
 // Render the PR document to a PDF buffer. Pure: no DB access.
@@ -335,6 +506,7 @@ export function renderPrPdf(data: PrPdfData): Promise<Buffer> {
       y = drawRequestBlock(doc, data, y);
       y = drawItemsBlock(doc, data, y);
       drawTotalsBlock(doc, data, y);
+      drawApprovalPage(doc, data);
       drawFooters(doc, data);
 
       doc.end();
@@ -349,11 +521,17 @@ export async function buildPrPdfData(prId: string): Promise<PrPdfData | null> {
   const pr = await findPrById(prId);
   if (!pr) return null;
 
-  const employee = await findEmployeeById(pr.requester_id);
+  const [employee, approvals] = await Promise.all([
+    findEmployeeById(pr.requester_id),
+    // Same rows and order as GET /api/pr/:id/status, so PDF and website match.
+    findApprovalStepsWithSignature(prId),
+  ]);
 
   return {
     company_name: process.env.COMPANY_NAME || "บริษัทตัวอย่าง จำกัด",
+    generated_at: new Date(),
     pr,
+    approvals,
     requester: {
       employee_id: pr.requester_id,
       full_name: employee?.full_name ?? pr.requester_id,
