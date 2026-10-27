@@ -180,7 +180,7 @@ Token มีอายุ 8 ชั่วโมง หากไม่ส่ง hea
 | `GET` | `/api/pr/:id` | อ่าน PR พร้อมสินค้า ยอดรวม และไฟล์แนบ | Bearer token; requester/approver |
 | `POST` | `/api/pr/:id/attachments` | แนบ PDF/JPEG/PNG ให้ PR | Bearer token |
 | `GET` | `/api/pr/:id/attachments/:attachmentId/download` | ดาวน์โหลดไฟล์แนบ | Bearer token; requester/approver |
-| `GET` | `/api/pr/:id/status` | อ่านสถานะ PR และทุกขั้นอนุมัติ | Bearer token |
+| `GET` | `/api/pr/:id/status` | อ่านสถานะ PR และทุกขั้นอนุมัติ | Bearer token; requester/approver |
 | `POST` | `/api/pr/:id/approve` | อนุมัติขั้นปัจจุบัน | Bearer token + passcode |
 | `POST` | `/api/pr/:id/reject` | ปฏิเสธ PR ในขั้นปัจจุบัน | Bearer token |
 | `GET` | `/api/pr/:id/pdf` | สร้างไฟล์ PDF ใบขอซื้อ (ข้อมูล PR + การ์ดผู้อนุมัติพร้อมลายเซ็น) | Bearer token; requester/approver |
@@ -582,7 +582,9 @@ Response `200`:
 
 สถานะของ PR คือ `pending`, `approved` หรือ `rejected` ส่วนสถานะของแต่ละ step คือ `pending`, `approved`, `rejected` หรือ `cancelled`
 
-Errors สำคัญ: `401` เมื่อ token ไม่ถูกต้อง, `404` เมื่อไม่พบ PR และ `500` เมื่อเกิดข้อผิดพลาดภายใน
+ดูได้เฉพาะผู้ขอซื้อและผู้อนุมัติที่อยู่ใน chain ของ PR นั้น
+
+Errors สำคัญ: `401` เมื่อ token ไม่ถูกต้อง, `403` เมื่อไม่ใช่ผู้ขอซื้อหรือผู้อนุมัติของ PR นี้, `404` เมื่อไม่พบ PR และ `500` เมื่อเกิดข้อผิดพลาดภายใน
 
 ### `POST /api/pr/:id/approve`
 
@@ -709,7 +711,6 @@ Errors สำคัญ: `401` เมื่อ token ไม่ถูกต้อ�
 - `/health` ตรวจเฉพาะ HTTP server ไม่ได้ตรวจ MySQL
 - ยังไม่มี automated unit/integration tests
 - ยังไม่มี global 404 handler หรือ standard error schema
-- `GET /api/pr/:id/status` ยังเปิดให้ผู้ใช้ที่มี token ทุกคนดูสถานะได้ หากรู้ PR ID
 - ระบบไม่เก็บชื่อไฟล์ต้นฉบับ ชื่อไฟล์ดาวน์โหลดจึงถูกสร้างจาก PR ID และ attachment ID
 - `reject` ไม่ต้องยืนยัน passcode ซ้ำ แต่ `approve` ต้องยืนยัน
 - หากมีพนักงานหลายคนใช้ `approval_level_id` เดียวกัน ระบบจะเลือกเพียงหนึ่งคนโดยไม่มีลำดับที่รับประกัน ควรกำหนดกติกาการเลือก approver หรือบังคับ uniqueness ให้ชัดเจน

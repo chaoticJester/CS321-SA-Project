@@ -54,8 +54,13 @@ export async function rejectPrController(req: AuthedRequest, res: Response): Pro
 
 // GET /api/pr/:id/status
 export async function getPrStatusController(req: AuthedRequest, res: Response): Promise<void> {
+  if (!req.user) {
+    res.status(401).json({ message: "Unauthorized" });
+    return;
+  }
+
   try {
-    const status = await getPrApprovalStatus(req.params.id as string);
+    const status = await getPrApprovalStatus(req.params.id as string, req.user.sub);
     res.status(200).json(status);
   } catch (error) {
     sendError(res, error, "getPrStatus");

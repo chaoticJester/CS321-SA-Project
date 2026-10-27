@@ -13,7 +13,7 @@ import {
     updatePrStatus,
     findApprovalStatusByPrId,
 } from '../models/prApprovalLog.model';
-import { findPrById } from '../models/pr.model';
+import { canEmployeeAccessPr, findPrById } from '../models/pr.model';
 import { Queryable } from '../types/db';
 
 interface ApprovalLevelRow extends RowDataPacket, ApprovalLevel {}
@@ -140,9 +140,6 @@ export async function approvePr(prId: string, approverId: string): Promise<Appro
 
         if (isFinal) {
             await updatePrStatus(prId, 'approved', connection);
-        
-        } else {
-            
         }
 
         await connection.commit();
@@ -196,10 +193,14 @@ export async function rejectPr(prId: string, approverId: string, reason: string)
     }
 }
 
-export async function getPrApprovalStatus(prId: string): Promise<PrApprovalStatus> {
+// Only the requester and the approvers in this PR's chain may see its status.
+export async function getPrApprovalStatus(prId: string, employeeId: string): Promise<PrApprovalStatus> {
     const pr = await findPrById(prId);
     if (!pr) {
         throw new ApprovalError(404, 'PR not found');
+    }
+    if (!(await canEmployeeAccessPr(prId, employeeId))) {
+        throw new ApprovalError(403, 'Cannot access this PR');
     }
 
     const chain = await findApprovalStatusByPrId(prId);
