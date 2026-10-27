@@ -20,4 +20,6 @@ export interface PendingApprovalItem {
   job_name: string | null;
   requester_id: string;
   created_at: Date;
+  requester_name: string;
+  total_amount: number;
 }

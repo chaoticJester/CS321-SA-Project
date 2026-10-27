@@ -98,3 +98,8 @@ CREATE TABLE approval_log (
         ON UPDATE CASCADE
         ON DELETE RESTRICT
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+USE pr_approval;
+
+CREATE INDEX idx_pr_requester_status_created
+ON pr (requester_id, status, created_at);

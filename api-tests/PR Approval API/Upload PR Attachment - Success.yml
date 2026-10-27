@@ -19,6 +19,27 @@ http:
         contentType: application/pdf
   auth: inherit
 
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        const body = res.getBody();
+
+        bru.setVar("prId", body.pr_id);
+        bru.setVar("attachmentId", body.attachment_id);
+    - type: tests
+      code: |-
+        test("upload returns 201", function () {
+          expect(res.getStatus()).to.equal(201);
+        });
+
+        test("response contains attachment id", function () {
+          const body = res.getBody();
+
+          expect(body).to.have.property("attachment_id");
+          expect(body).to.have.property("file_path");
+        });
+
 settings:
   encodeUrl: true
   timeout: 0

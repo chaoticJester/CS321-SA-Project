@@ -2,27 +2,6 @@
 
 Backend สำหรับระบบสร้างและอนุมัติใบขอซื้อ (Purchase Request หรือ PR) พัฒนาด้วย Express, TypeScript และ MySQL
 
-## สถานะการตรวจสอบล่าสุด
-
-ตรวจสอบเมื่อวันที่ 29 กันยายน 2026
-
-| รายการ | ผลลัพธ์ |
-|---|---|
-| `npm run build` | ผ่าน — TypeScript compile สำเร็จ |
-| `GET /health` | ผ่าน — ตอบ `200 {"ok":true}` |
-| validation ของ `POST /api/auth/login` | ผ่าน — body ว่างตอบ `400` |
-| JWT guard ของ protected API | ผ่าน — ไม่มี token ตอบ `401` |
-| utility คำนวณยอดและสร้างเลข PR | ผ่าน — ทดสอบยอดหลายรายการและลำดับ `IT-009-PR` → `IT-010-PR` |
-| login และอ่านข้อมูลจาก MySQL | ผ่าน |
-| สร้างและอ่าน PR/approval status | ผ่าน |
-| pending approvals และการบังคับลำดับผู้อนุมัติ | ผ่าน — ผู้อนุมัติผิดลำดับได้รับ `403` |
-| แนบไฟล์ PDF/JPEG/PNG | ผ่านด้วยไฟล์ `image/png` |
-| approve จนครบ approval chain | ผ่าน — PR เปลี่ยนเป็น `approved` |
-| reject approval flow | ผ่าน — PR เป็น `rejected` และขั้นที่เหลือเป็น `cancelled` |
-| `npm test` | ไม่ผ่าน — โปรเจกต์ยังไม่มี automated test และ script ปัจจุบันตั้งใจจบด้วย error |
-
-การทดสอบ integration ใช้ข้อมูลทดสอบชั่วคราวกับ MySQL จริง และลบ PR/ไฟล์แนบทดสอบออกหลังเสร็จแล้ว อย่างไรก็ตามโปรเจกต์ยังควรมี automated tests เพื่อให้รันทดสอบซ้ำและตรวจ regression ได้อย่างสม่ำเสมอ
-
 ## การติดตั้งและเริ่มระบบ
 
 ต้องมี Node.js, npm และ MySQL
@@ -48,6 +27,24 @@ JWT_SECRET=replace_with_a_strong_secret
 ```bash
 mysql -u root -p < database/schema.sql
 mysql -u root -p pr_approval < database/seed_data.sql
+mysql -u root -p pr_approval < database/add_pr_number_reservations.sql
+```
+
+`schema.sql` ยังไม่มีตารางจองเลข จึงต้องรัน `add_pr_number_reservations.sql` ด้วย โดยรันหลัง seed เพื่อให้ตัวนับเริ่มจากเลข PR สูงสุดที่มีอยู่ หากใช้ฐานข้อมูลเดิม ให้รันเฉพาะไฟล์เพิ่มตารางนี้หนึ่งครั้งในช่วงที่ไม่มีการสร้าง PR หรือจองเลข ไม่ต้องรัน schema/seed ซ้ำ ไฟล์นี้ใช้ `USE pr_approval` หากเปลี่ยนชื่อฐานข้อมูลต้องปรับให้ตรงกัน
+
+สำหรับ PowerShell ที่ไม่รองรับ input redirection แบบ `<` สามารถเปิด MySQL client แล้วใช้คำสั่งต่อไปนี้จาก directory `backend`:
+
+```sql
+SOURCE database/schema.sql;
+SOURCE database/seed_data.sql;
+SOURCE database/add_pr_number_reservations.sql;
+```
+
+หากสร้างฐานข้อมูลไว้ก่อนที่จะเพิ่ม API รายการคำขอ ให้เพิ่ม index นี้หนึ่งครั้ง (ฐานข้อมูลใหม่ที่สร้างจาก `schema.sql` มี index นี้แล้ว):
+
+```sql
+CREATE INDEX idx_pr_requester_status_created
+ON pr (requester_id, status, created_at);
 ```
 
 เริ่มเซิร์ฟเวอร์สำหรับพัฒนา:
@@ -102,6 +99,7 @@ macOS/Linux/Git Bash:
 ```bash
 docker exec -i pr-approval-mysql mysql -uroot -pdevpassword123 < database/schema.sql
 docker exec -i pr-approval-mysql mysql -uroot -pdevpassword123 pr_approval < database/seed_data.sql
+docker exec -i pr-approval-mysql mysql -uroot -pdevpassword123 pr_approval < database/add_pr_number_reservations.sql
 ```
 
 PowerShell:
@@ -109,6 +107,7 @@ PowerShell:
 ```powershell
 Get-Content -Raw database/schema.sql | docker exec -i pr-approval-mysql mysql -uroot -pdevpassword123
 Get-Content -Raw database/seed_data.sql | docker exec -i pr-approval-mysql mysql -uroot -pdevpassword123 pr_approval
+Get-Content -Raw database/add_pr_number_reservations.sql | docker exec -i pr-approval-mysql mysql -uroot -pdevpassword123 pr_approval
 ```
 
 > `seed_data.sql` เป็นคำสั่ง `INSERT` ธรรมดา ควรโหลดเพียงครั้งเดียวต่อฐานข้อมูลว่าง หากรันซ้ำจะชน primary/unique keys
@@ -175,9 +174,12 @@ Token มีอายุ 8 ชั่วโมง หากไม่ส่ง hea
 | `POST` | `/api/auth/login` | เข้าสู่ระบบและรับ JWT | ไม่ต้องใช้ |
 | `GET` | `/api/employees/:id` | อ่านข้อมูลพนักงาน | Bearer token |
 | `GET` | `/api/employees/:id/pending-approvals` | ดู PR ที่รอพนักงานคนนี้อนุมัติในลำดับปัจจุบัน | Bearer token |
-| `POST` | `/api/pr` | สร้าง PR พร้อมรายการสินค้าและ approval chain | Bearer token |
-| `GET` | `/api/pr/:id` | อ่าน PR พร้อมรายการสินค้าและยอดรวม | Bearer token |
+| `GET` | `/api/pr` | ดูรายการคำขอของผู้ใช้ปัจจุบัน พร้อม filter และ pagination | Bearer token |
+| `POST` | `/api/pr/number-reservations` | จองเลข PR ในนามผู้ใช้ปัจจุบัน | Bearer token |
+| `POST` | `/api/pr` | สร้าง PR ด้วย `reservation_id` พร้อมรายการสินค้าและ approval chain | Bearer token |
+| `GET` | `/api/pr/:id` | อ่าน PR พร้อมสินค้า ยอดรวม และไฟล์แนบ | Bearer token; requester/approver |
 | `POST` | `/api/pr/:id/attachments` | แนบ PDF/JPEG/PNG ให้ PR | Bearer token |
+| `GET` | `/api/pr/:id/attachments/:attachmentId/download` | ดาวน์โหลดไฟล์แนบ | Bearer token; requester/approver |
 | `GET` | `/api/pr/:id/status` | อ่านสถานะ PR และทุกขั้นอนุมัติ | Bearer token |
 | `POST` | `/api/pr/:id/approve` | อนุมัติขั้นปัจจุบัน | Bearer token + passcode |
 | `POST` | `/api/pr/:id/reject` | ปฏิเสธ PR ในขั้นปัจจุบัน | Bearer token |
@@ -273,14 +275,98 @@ Response `200`:
 
 > ปัจจุบันผู้ใช้ที่ login แล้วสามารถดู pending approvals ของ employee ID ใดก็ได้
 
+### `GET /api/pr`
+
+ส่งรายการคำขอของผู้ใช้ที่ login อยู่ โดยอ่าน `requester_id` จาก JWT ผู้เรียกจึงไม่ต้องและไม่สามารถกำหนด employee ID ผ่าน query string ได้ รายการเรียงจาก `created_at` ล่าสุดไปเก่าสุด และส่งเฉพาะข้อมูลสรุปโดยไม่รวม `items`
+
+Query parameters:
+
+| Parameter | ค่าเริ่มต้น | รายละเอียด |
+|---|---:|---|
+| `status` | ทุกสถานะ | `pending`, `approved` หรือ `rejected`; ระบุหลายค่าโดยคั่นด้วย comma |
+| `page` | `1` | หน้าที่ต้องการ ต้องเป็นจำนวนเต็มตั้งแต่ 1 ขึ้นไป |
+| `limit` | `20` | จำนวนรายการต่อหน้า ต้องเป็นจำนวนเต็มระหว่าง 1–100 |
+
+ตัวอย่างการใช้งาน:
+
+```http
+GET /api/pr
+GET /api/pr?status=pending&page=1&limit=20
+GET /api/pr?status=approved,rejected&page=1&limit=20
+```
+
+การนำไปใช้ใน frontend:
+
+- หน้า **คำขอของฉัน** ใช้ `GET /api/pr`
+- แท็บ **กำลังดำเนินการ** ใช้ `GET /api/pr?status=pending`
+- หน้า **ประวัติคำขอ** ใช้ `GET /api/pr?status=approved,rejected`
+- เมื่อผู้ใช้เลือกรายการ ให้เปิดรายละเอียดด้วย `GET /api/pr/:id`
+
+Response `200`:
+
+```json
+{
+  "data": [
+    {
+      "pr_id": "PR0123456789abcdef",
+      "pr_no": "IT-003-PR",
+      "requester_id": "EMP001",
+      "require_date": "2026-10-15T00:00:00.000Z",
+      "job_name": "Office notebooks",
+      "vendor_name": "ABC Company",
+      "status": "pending",
+      "created_at": "2026-09-29T07:00:00.000Z",
+      "total_amount": 44000
+    }
+  ],
+  "pagination": {
+    "page": 1,
+    "limit": 20,
+    "total": 1,
+    "total_pages": 1
+  }
+}
+```
+
+หากไม่พบรายการ `data` จะเป็น `[]` และ `pagination.total` กับ `pagination.total_pages` จะเป็น `0`
+
+Errors สำคัญ:
+
+- `400` เมื่อ `status` ไม่ใช่ค่าที่รองรับ
+- `400` เมื่อ `page` ไม่ใช่จำนวนเต็มบวก
+- `400` เมื่อ `limit` อยู่นอกช่วง 1–100
+- `401` เมื่อไม่มี token หรือ token ไม่ถูกต้อง
+- `500` เมื่ออ่านข้อมูลจากฐานข้อมูลไม่สำเร็จ
+
+### `POST /api/pr/number-reservations`
+
+จองเลข PR รูปแบบ `IT-001-PR` และผูกการจองกับพนักงานจาก JWT โดยยังไม่สร้างเอกสาร PR ไม่ต้องส่ง request body
+
+Response `201`:
+
+```json
+{
+  "reservation_id": "67e63420-2280-4cf8-8c5a-8fd623e1bc90",
+  "pr_no": "IT-003-PR"
+}
+```
+
+Frontend แสดง `pr_no` บนฟอร์มและเก็บ `reservation_id` เพื่อส่งตอนสร้าง PR แต่ละคำขอจองที่สำเร็จจะออกเลขใหม่ จึงควรเก็บการจองเดิมไว้ระหว่างกรอกฟอร์ม
+
+Errors สำคัญ:
+
+- `401` เมื่อไม่มี token หรือ token ไม่ถูกต้อง
+- `500` เมื่อจองเลขไม่สำเร็จ เช่น ไม่มีตัวนับหรือบันทึกการจองไม่ได้
+
 ### `POST /api/pr`
 
-สร้าง PR ในนามพนักงานจาก JWT, สร้างเลข PR รูปแบบ `IT-001-PR` และสร้าง approval chain ตามยอดรวม
+สร้าง PR ในนามพนักงานจาก JWT โดยใช้เลขจากการจอง และสร้าง approval chain ตามยอดรวม ต้องเรียก `POST /api/pr/number-reservations` ก่อน แล้วส่ง `reservation_id` ที่ได้รับกลับมา ระบบอ่าน `pr_no` จากฐานข้อมูล ไม่ใช้เลขที่ frontend กำหนดเอง
 
 Request body:
 
 ```json
 {
+  "reservation_id": "<reservation_id>",
   "require_date": "2026-10-15T00:00:00Z",
   "job_name": "Office notebooks",
   "purpose": "Replace old equipment",
@@ -315,11 +401,31 @@ Response `201`:
 }
 ```
 
-Errors สำคัญ: `400` เมื่อ body, วันที่ หรือ items ไม่ถูกต้อง, `401` เมื่อ token ไม่ถูกต้อง และ `500` เมื่อสร้าง PR ไม่สำเร็จ
+Errors สำคัญ:
+
+- `400` เมื่อ body, วันที่ หรือ items ไม่ถูกต้อง
+- `400` พร้อม `Invalid reservation_id` เมื่อไม่มีรหัสการจองหรือรูปแบบไม่ใช่ UUID v4
+- `400` พร้อม `Invalid PR number reservation` เมื่อไม่พบการจองหรือการจองไม่ใช่ของผู้ใช้ปัจจุบัน
+- `401` เมื่อไม่มี token หรือ token ไม่ถูกต้อง
+- `409` พร้อม `PR number reservation has already been used` เมื่อการจองถูกใช้แล้ว
+- `500` เมื่อสร้าง PR ไม่สำเร็จ
+
+### Flow การจองเลขและสร้าง PR
+
+1. Login และรับ JWT
+2. เรียก `POST /api/pr/number-reservations` แล้วเก็บ `reservation_id` กับ `pr_no`
+3. ส่ง `reservation_id` พร้อมข้อมูลฟอร์มไปที่ `POST /api/pr` ด้วยผู้ใช้คนเดิม
+4. เมื่อสร้างสำเร็จ ใช้ `pr_id` ที่ได้รับอ่านรายละเอียดหรือแนบไฟล์
+
+ตาราง `pr_number_counter` เก็บลำดับล่าสุด ส่วน `pr_number_reservation` เก็บรหัสการจอง เลข PR เจ้าของ และ `used_at` การจองใช้ transaction และ `SELECT ... FOR UPDATE` ล็อกแถวตัวนับ เพื่อให้คำขอที่ใช้ตัวนับเดียวกันออกเลขตามลำดับ
+
+ตอนสร้าง PR ระบบล็อกแถวการจอง ตรวจเจ้าของและ `used_at` แล้วบันทึก PR, items, approval logs และเวลาใช้การจองภายใน transaction เดียวกัน หากขั้นตอนใดล้มเหลวจะ rollback และการจองยังใช้ใหม่ได้ หากสร้างสำเร็จแล้วส่งซ้ำจะตอบ `409`
+
+เลขที่จองสำเร็จแล้วจะไม่ถูกนำกลับมาแจกใหม่ จึงอาจมีเลขข้ามในรายการ PR หากผู้ใช้ปิดฟอร์มหรือไม่ได้บันทึกเอกสาร ระบบปัจจุบันยังไม่มี API ยกเลิกการจองหรือวันหมดอายุของการจอง
 
 ### `GET /api/pr/:id`
 
-อ่าน PR, รายการสินค้า และคำนวณ `total_amount` จากผลรวม `qty * unit_price`
+อ่าน PR, รายการสินค้า, รายการไฟล์แนบ และคำนวณ `total_amount` จากผลรวม `qty * unit_price` ผู้เรียกต้องเป็น requester หรือเป็น approver ที่อยู่ใน approval chain ของ PR
 
 Response `200`:
 
@@ -345,11 +451,25 @@ Response `200`:
       "unit_price": "22000.00"
     }
   ],
+  "attachments": [
+    {
+      "attachment_id": "AT0123456789abcdef",
+      "pr_id": "PR0001",
+      "file_type": "application/pdf",
+      "file_path": "0123456789abcdef0123456789abcdef.pdf",
+      "uploaded_at": "2026-07-01T02:05:00.000Z"
+    }
+  ],
   "total_amount": 110000
 }
 ```
 
-Errors สำคัญ: `401` เมื่อ token ไม่ถูกต้อง, `404` เมื่อไม่พบ PR และ `500` เมื่อเกิดข้อผิดพลาดภายใน
+Errors สำคัญ:
+
+- `401` เมื่อไม่มี token หรือ token ไม่ถูกต้อง
+- `403` เมื่อผู้ใช้ไม่ใช่ requester หรือ approver ของ PR
+- `404` เมื่อไม่พบ PR
+- `500` เมื่อเกิดข้อผิดพลาดภายใน
 
 ### `POST /api/pr/:id/attachments`
 
@@ -384,7 +504,41 @@ Errors สำคัญ:
 - `404` เมื่อไม่พบ PR
 - `413` เมื่อไฟล์เกิน 10 MB
 
-> API นี้ยังไม่มี endpoint สำหรับ download และ Express ยังไม่ได้เปิด `uploads/` เป็น static directory
+### `GET /api/pr/:id/attachments/:attachmentId/download`
+
+ดาวน์โหลดไฟล์แนบ ผู้เรียกต้องเป็น requester หรือ approver ใน approval chain ของ PR ระบบอ่านไฟล์ผ่าน endpoint นี้โดยตรงและไม่ได้เปิดโฟลเดอร์ `uploads/` เป็น static directory
+
+ตัวอย่าง:
+
+```bash
+curl -L \
+  "http://localhost:3000/api/pr/PR0001/attachments/AT0123456789abcdef/download" \
+  -H "Authorization: Bearer <token>" \
+  -o downloaded-file.pdf
+```
+
+หากต้องการให้ curl ใช้ชื่อจาก `Content-Disposition`:
+
+```bash
+curl -L -OJ \
+  "http://localhost:3000/api/pr/PR0001/attachments/AT0123456789abcdef/download" \
+  -H "Authorization: Bearer <token>"
+```
+
+เนื่องจากฐานข้อมูลไม่ได้เก็บชื่อไฟล์ต้นฉบับ ระบบจะสร้างชื่อดาวน์โหลดในรูปแบบ:
+
+```text
+<PR_ID>-<ATTACHMENT_ID>.<extension>
+```
+
+Response `200` เป็น binary file พร้อม header `Content-Disposition: attachment` ไม่ใช่ JSON
+
+Errors สำคัญ:
+
+- `401` เมื่อไม่มี token หรือ token ไม่ถูกต้อง
+- `403` เมื่อผู้ใช้ไม่ใช่ requester หรือ approver ของ PR
+- `404` เมื่อไม่พบ attachment, path ไม่ถูกต้อง หรือไฟล์ไม่มีอยู่บน disk
+- `500` เมื่อเกิดข้อผิดพลาดภายในหรือส่งไฟล์ไม่สำเร็จ
 
 ### `GET /api/pr/:id/status`
 
@@ -524,7 +678,7 @@ Errors สำคัญ:
 - `/health` ตรวจเฉพาะ HTTP server ไม่ได้ตรวจ MySQL
 - ยังไม่มี automated unit/integration tests
 - ยังไม่มี global 404 handler หรือ standard error schema
-- endpoint ที่รับ `:id` ไม่มี authorization แบบจำกัดให้ดูเฉพาะข้อมูลของตนเอง ยกเว้นการแนบไฟล์และลำดับ approve/reject
-- มีการบันทึกไฟล์แนบ แต่ยังไม่มี API สำหรับอ่านหรือดาวน์โหลดไฟล์
+- `GET /api/pr/:id/status` ยังเปิดให้ผู้ใช้ที่มี token ทุกคนดูสถานะได้ หากรู้ PR ID
+- ระบบไม่เก็บชื่อไฟล์ต้นฉบับ ชื่อไฟล์ดาวน์โหลดจึงถูกสร้างจาก PR ID และ attachment ID
 - `reject` ไม่ต้องยืนยัน passcode ซ้ำ แต่ `approve` ต้องยืนยัน
 - หากมีพนักงานหลายคนใช้ `approval_level_id` เดียวกัน ระบบจะเลือกเพียงหนึ่งคนโดยไม่มีลำดับที่รับประกัน ควรกำหนดกติกาการเลือก approver หรือบังคับ uniqueness ให้ชัดเจน

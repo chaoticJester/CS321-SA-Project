@@ -1,23 +1,60 @@
-import type {Request, Response} from "express";
-import {findPrById} from "../models/pr.model.js";
+import type { Response } from "express";
 import type { AuthedRequest } from "../middlewares/auth.middleware.js";
-import type { CreatePrInput } from "../types/pr.js";
-import { createPr } from "../services/pr.service.js";
-import { unlink } from "node:fs/promises";
+import {
+  createPr,
+  PrReservationError,
+} from "../services/pr.service.js";
+import { access, unlink } from "node:fs/promises";
+import path from "node:path";
 import type { NextFunction } from "express";
-import { insertAttachment } from "../models/pr.model.js";
+import type { CreatePrInput, PrStatus } from "../types/pr.js";
+import {
+  uploadDirectory,
+} from "../middlewares/prUpload.middleware.js";
+import {
+  insertAttachment,
+  findPrById,
+  findPrsByRequester,
+  findAttachmentById,
+  canEmployeeAccessPr,
+  countPrsByRequester,
+} from "../models/pr.model.js";
+import { reservePrNumber } from "../services/pr-number.service.js";
 
+
+const ALLOWED_STATUSES = new Set<PrStatus>([
+  "pending",
+  "approved",
+  "rejected",
+]);
 
 export async function getPrById(
-  req: Request,
+  req: AuthedRequest,
   res: Response,
 ): Promise<void> {
+  if (!req.user) {
+    res.status(401).json({ message: "Unauthorized" });
+    return;
+  }
+
   try {
     const prId = req.params.id as string;
     const pr = await findPrById(prId);
 
     if (!pr) {
       res.status(404).json({message: "PR not found"});
+      return;
+    }
+
+    const canAccess = await canEmployeeAccessPr(
+      prId,
+      req.user.sub,
+    );
+
+    if (!canAccess) {
+      res.status(403).json({
+        message: "Cannot access this PR",
+      });
       return;
     }
     
@@ -45,6 +82,19 @@ export async function createPrController(
   }
 
   const data = body as Record<string, unknown>;
+
+  const reservationId = data.reservation_id;
+  
+  if (
+    typeof reservationId !== "string" ||
+    !/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+      reservationId,
+    )
+  ) {
+    res.status(400).json({ message: "Invalid reservation_id" });
+    return;
+  }
+  
   const date = typeof data.require_date === "string"
     ? new Date(data.require_date)
     : null;
@@ -115,9 +165,15 @@ export async function createPrController(
   };
 
   try {
-    const prId = await createPr(input);
+    const prId = await createPr(input, reservationId);
     res.status(201).json({ pr_id: prId });
   } catch (error) {
+    if (error instanceof PrReservationError) {
+      res.status(error.statusCode).json({
+        message: error.message,
+      });
+      return;
+    }
     console.error("Failed to create PR:", error);
     res.status(500).json({ message: "Failed to create PR" });
   }
@@ -183,5 +239,220 @@ export async function addPrAttachment(
 
     console.error("Failed to save attachment:", error);
     res.status(500).json({ message: "Failed to save attachment" });
+  }
+}
+
+export async function listMyPrs(
+  req: AuthedRequest,
+  res: Response,
+): Promise<void> {
+  if (!req.user) {
+    res.status(401).json({ message: "Unauthorized" });
+    return;
+  }
+
+  const page = Number(req.query.page ?? 1);
+  const limit = Number(req.query.limit ?? 20);
+
+  if (!Number.isInteger(page) || page < 1) {
+    res.status(400).json({
+      message: "page must be a positive integer",
+    });
+    return;
+  }
+
+  if (!Number.isInteger(limit) || limit < 1 || limit > 100) {
+    res.status(400).json({
+      message: "limit must be an integer between 1 and 100",
+    });
+    return;
+  }
+
+  const rawStatus =
+    typeof req.query.status === "string"
+      ? req.query.status
+      : "";
+
+  const statuses = rawStatus
+    .split(",")
+    .map((status) => status.trim())
+    .filter((status) => status.length > 0);
+
+  if (
+    !statuses.every((status) =>
+      ALLOWED_STATUSES.has(status as PrStatus),
+    )
+  ) {
+    res.status(400).json({
+      message: "status must be pending, approved or rejected",
+    });
+    return;
+  }
+
+  try {
+    const result = await findPrsByRequester(
+      req.user.sub,
+      statuses as PrStatus[],
+      page,
+      limit,
+    );
+
+    res.status(200).json({
+      data: result.data,
+      pagination: {
+        page,
+        limit,
+        total: result.total,
+        total_pages: Math.ceil(result.total / limit),
+      },
+    });
+  } catch (error) {
+    console.error("Failed to list PRs:", error);
+
+    res.status(500).json({
+      message: "Internal server error",
+    });
+  }
+}
+
+export async function getMyNotificationCount(
+  req: AuthedRequest,
+  res: Response,
+): Promise<void> {
+  if (!req.user) {
+    res.status(401).json({ message: "Unauthorized" });
+    return;
+  }
+
+  try {
+    const count = await countPrsByRequester(req.user.sub);
+    res.status(200).json({ count });
+  } catch (error) {
+    console.error("Failed to count notifications:", error);
+    res.status(500).json({ message: "Internal server error" });
+  }
+}
+
+export async function downloadPrAttachment(
+  req: AuthedRequest,
+  res: Response,
+): Promise<void> {
+  if (!req.user) {
+    res.status(401).json({
+      message: "Unauthorized",
+    });
+    return;
+  }
+
+  const prId = req.params.id as string;
+  const attachmentId = req.params.attachmentId as string;
+
+  try {
+    const canAccess = await canEmployeeAccessPr(
+      prId,
+      req.user.sub,
+    );
+
+    if (!canAccess) {
+      res.status(403).json({
+        message: "Cannot access attachments for this PR",
+      });
+      return;
+    }
+
+    const attachment = await findAttachmentById(
+      prId,
+      attachmentId,
+    );
+
+    if (!attachment) {
+      res.status(404).json({
+        message: "Attachment not found",
+      });
+      return;
+    }
+
+    if (
+      path.basename(attachment.file_path) !==
+      attachment.file_path
+    ) {
+      res.status(404).json({
+        message: "Attachment file not found",
+      });
+      return;
+    }
+
+    const absolutePath = path.resolve(
+      uploadDirectory,
+      attachment.file_path,
+    );
+
+    try {
+      await access(absolutePath);
+    } catch {
+      res.status(404).json({
+        message: "Attachment file not found",
+      });
+      return;
+    }
+
+    const extension = path.extname(
+      attachment.file_path,
+    );
+
+    const downloadName =
+      `${prId}-${attachment.attachment_id}${extension}`;
+
+    res.download(
+      absolutePath,
+      downloadName,
+      (error) => {
+        if (!error) {
+          return;
+        }
+
+        console.error(
+          "Failed to download attachment:",
+          error,
+        );
+
+        if (!res.headersSent) {
+          res.status(500).json({
+            message: "Failed to download attachment",
+          });
+        }
+      },
+    );
+  } catch (error) {
+    console.error(
+      "downloadPrAttachment error:",
+      error,
+    );
+
+    res.status(500).json({
+      message: "Internal server error",
+    });
+  }
+}
+
+export async function reservePrNumberController(
+  req: AuthedRequest,
+  res: Response,
+): Promise<void> {
+  if (!req.user) {
+    res.status(401).json({ message: "Unauthorized" });
+    return;
+  }
+
+  try {
+    const reservation = await reservePrNumber(req.user.sub);
+
+    res.status(201).json(reservation);
+  } catch (error) {
+    console.error("Failed to reserve PR number:", error);
+
+    res.status(500).json({
+      message: "Failed to reserve PR number",
+    });
   }
 }

@@ -1,17 +1,45 @@
 import type { ResultSetHeader, PoolConnection, RowDataPacket } from "mysql2/promise";
 import { randomBytes } from "node:crypto";
-import type { CreatePrInput } from "../types/pr.js";
+import type {
+  CreatePrInput,
+  PrRow,
+  PrItemRow,
+  PrWithItems,
+  PrListResult,
+  PrStatus,
+  PrAttachment,
+} from "../types/pr.js";
 import pool from "../config/db.js";
-import type { PrRow, PrItemRow, PrWithItems } from "../types/pr.js";
 
+interface PrListDbRow extends RowDataPacket {
+  pr_id: string;
+  pr_no: string;
+  requester_id: string;
+  require_date: Date;
+  job_name: string | null;
+  purpose: string | null;
+  asset_type: string | null;
+  vendor_name: string | null;
+  status: PrStatus;
+  created_at: Date;
+  total_amount: string;
+}
+
+interface CountRow extends RowDataPacket {
+  total: number;
+}
+interface PrAccessDbRow extends RowDataPacket {
+  can_access: number;
+}
+interface LatestPrNumberRow extends RowDataPacket {
+    pr_no: string;
+}
 type PrDbRow = Omit<PrRow, "require_date"> &
   RowDataPacket & {
     require_date: string;
 };
 type PrItemDbRow = PrItemRow & RowDataPacket;
-interface LatestPrNumberRow extends RowDataPacket {
-    pr_no: string;
-}
+type AttachmentDbRow = PrAttachment & RowDataPacket;
 
 export async function getLatestPrNumber(
     connection: PoolConnection,
@@ -102,6 +130,21 @@ export async function findPrById(
     [prId],
   );
 
+  const [attachments] = await pool.query<AttachmentDbRow[]>(
+    `
+      SELECT
+        attachment_id,
+        pr_id,
+        file_type,
+        file_path,
+        uploaded_at
+      FROM attachment
+      WHERE pr_id = ?
+      ORDER BY uploaded_at DESC
+    `,
+    [prId],
+  );
+
   const totalAmount = items.reduce(
     (sum, item) => sum + item.qty * Number(item.unit_price),
     0
@@ -111,6 +154,7 @@ export async function findPrById(
     ...pr,
     require_date: new Date(pr.require_date),
     items,
+    attachments,
     total_amount: totalAmount,
   };
 }
@@ -130,4 +174,125 @@ export async function insertAttachment(
   );
   
   return attachmentId;
+}
+
+export async function findPrsByRequester(
+  requesterId: string,
+  statuses: PrStatus[],
+  page: number,
+  limit: number,
+): Promise<PrListResult> {
+  const offset = (page - 1) * limit;
+
+  let where = "WHERE pr.requester_id = ?";
+  const params: unknown[] = [requesterId];
+
+  if (statuses.length > 0) {
+    where += " AND pr.status IN (?)";
+    params.push(statuses);
+  }
+
+  const [countRows] = await pool.query<CountRow[]>(
+    `
+      SELECT COUNT(*) AS total
+      FROM pr
+      ${where}
+    `,
+    params,
+  );
+
+  const [rows] = await pool.query<PrListDbRow[]>(
+    `
+      SELECT
+        pr.pr_id,
+        pr.pr_no,
+        pr.requester_id,
+        pr.require_date,
+        pr.job_name,
+        pr.purpose,
+        pr.asset_type,
+        pr.vendor_name,
+        pr.status,
+        pr.created_at,
+        (
+          SELECT COALESCE(SUM(item.qty * item.unit_price), 0)
+          FROM pr_item item
+          WHERE item.pr_id = pr.pr_id
+        ) AS total_amount
+      FROM pr
+      ${where}
+      ORDER BY pr.created_at DESC
+      LIMIT ?
+      OFFSET ?
+    `,
+    [...params, limit, offset],
+  );
+
+  return {
+    data: rows.map((row) => ({
+      ...row,
+      total_amount: Number(row.total_amount),
+    })),
+    total: Number(countRows[0]?.total ?? 0),
+  };
+}
+
+export async function countPrsByRequester(
+  requesterId: string,
+): Promise<number> {
+  const [rows] = await pool.query<CountRow[]>(
+    `SELECT COUNT(*) AS total
+     FROM pr
+     WHERE requester_id = ?`,
+    [requesterId],
+  );
+
+  return Number(rows[0]?.total ?? 0);
+}
+
+export async function findAttachmentById(
+  prId: string,
+  attachmentId: string,
+): Promise<PrAttachment | null> {
+  const [rows] = await pool.query<AttachmentDbRow[]>(
+    `
+      SELECT
+        attachment_id,
+        pr_id,
+        file_type,
+        file_path,
+        uploaded_at
+      FROM attachment
+      WHERE pr_id = ?
+        AND attachment_id = ?
+      LIMIT 1
+    `,
+    [prId, attachmentId],
+  );
+
+  return rows[0] ?? null;
+}
+
+export async function canEmployeeAccessPr(
+  prId: string,
+  employeeId: string,
+): Promise<boolean> {
+  const [rows] = await pool.query<PrAccessDbRow[]>(
+    `
+      SELECT EXISTS (
+        SELECT 1
+        FROM pr
+        LEFT JOIN approval_log
+          ON approval_log.pr_id = pr.pr_id
+        WHERE pr.pr_id = ?
+          AND (
+            pr.requester_id = ?
+            OR approval_log.approver_id = ?
+          )
+      ) AS can_access
+    `,
+    [prId, employeeId, employeeId],
+  );
+
+  return Boolean(rows[0]?.can_access);
 }

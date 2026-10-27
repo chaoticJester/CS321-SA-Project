@@ -1,0 +1,23 @@
+info:
+  name: GET PR PENDING LIST
+  type: http
+  seq: 15
+
+http:
+  method: GET
+  url: "{{baseUrl}}/api/pr?status=pending"
+  headers:
+    - name: Authorization
+      value: Bearer {{token}}
+  params:
+    - name: status
+      value: pending
+      type: query
+  auth: inherit
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false
