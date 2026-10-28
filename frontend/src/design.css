@@ -84,15 +84,57 @@
 .requester-history-table small { display: block; color: #888; font-size: 14px; }
 .request-history-status { display: inline-flex; align-items: center; justify-content: center; border-radius: 8px; padding: 3px 10px; color: #5e6669; font-size: 14px; }
 .requester-history-table button { display: flex; align-items: center; gap: 7px; border: 0; background: transparent; color: #4f6fae; font-size: 14px; }
-.requester-detail .approval-step-content { flex-direction: column; align-items: flex-start; gap: 9px; }
-.requester-detail .approval-step-connector { margin-top: 18px; }
-.requester-detail .approval-chain > li:last-child { flex: 1; }
-.requester-detail .approval-chain { gap: 15px; }
-.requester-detail .approval-chain small { line-height: 1.4; }
-.requester-detail .approval-step-circle { width: 36px; height: 36px; }
-.requester-detail .approval-step-circle.is-complete { color: #5e6669; }
-.requester-detail .approval-chain li { position: relative; }
-.requester-detail .approval-step-connector { flex: 1; margin-left: -40px; }
+.requester-detail .approval-status-card { padding: 19px 41px 27px; border: 2px solid #8888884d; border-radius: 8px; background: white; }
+.requester-detail .approval-status-card h2 { color: #4f6fae; font: 700 22px/29px 'Sarabun', sans-serif; }
+.requester-detail .approval-status-count { color: #888; font-size: 18px; font-weight: 500; }
+.requester-detail .approval-chain { gap: 0; margin: 12px 0 0; }
+.requester-detail .approval-chain > li { position: relative; display: block; flex: 1 1 0; }
+.requester-detail .approval-chain > li:last-child { flex: 0 0 auto; }
+.requester-detail .approval-step-content { flex-direction: column; align-items: flex-start; gap: 11px; }
+.requester-detail .approval-step-circle { width: 36px; height: 36px; border-color: #7fa0d5; color: #4f6fae; font: 700 22px/1 'Bai Jamjuree', sans-serif; }
+.requester-detail .approval-step-circle.is-current { border-color: #4f6fae; background: #4f6fae; color: white; }
+.requester-detail .approval-step-circle.is-complete { border-color: #98bf93; background: #98bf93; color: white; }
+.requester-detail .approval-step-circle.is-rejected { border-color: #b4423e; background: #b4423e4d; color: #b4423e; }
+.requester-detail .approval-step-text { display: flex; max-width: calc(100% - 12px); flex-direction: column; white-space: nowrap; }
+.requester-detail .approval-chain > li:last-child .approval-step-text { max-width: none; }
+.requester-detail .approval-step-text strong { overflow: hidden; color: #222a2d; font-size: 16px; font-weight: 600; line-height: 19px; text-overflow: ellipsis; }
+.requester-detail .approval-step-level { color: #222a2dcc; font: 500 14px/18px 'Bai Jamjuree', 'Noto Sans Thai', sans-serif; }
+.requester-detail .approval-step-status { color: #888; font-size: 14px; font-weight: 500; line-height: 17px; }
+.requester-detail .approval-step-level + .approval-step-status { margin-top: 5px; }
+.requester-detail .approval-step-status.is-current { color: #4f6fae; }
+.requester-detail .approval-step-status.is-rejected { color: #b4423e; }
+.requester-detail .approval-step-connector { position: absolute; top: 17px; left: 67px; right: 31px; height: 2px; min-width: 0; margin: 0; border: 0; background: repeating-linear-gradient(90deg, #d9d6cd 0 6px, transparent 6px 9px); }
+/* Request detail motion: sections rise in, then the approval chain reveals step by step. */
+@keyframes step-pop { 0% { opacity: 0; transform: scale(.4); } 70% { transform: scale(1.12); } 100% { opacity: 1; transform: scale(1); } }
+@keyframes step-draw { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+@keyframes check-draw { from { stroke-dashoffset: 20; } to { stroke-dashoffset: 0; } }
+@keyframes step-shake { 0%, 100% { transform: translateX(0); } 20%, 60% { transform: translateX(-3px); } 40%, 80% { transform: translateX(3px); } }
+@keyframes step-ring { 0% { box-shadow: 0 0 0 0 #4f6fae59; } 70%, 100% { box-shadow: 0 0 0 9px #4f6fae00; } }
+.requester-detail > main > * { animation: page-enter .4s cubic-bezier(.22, 1, .36, 1) backwards; }
+.requester-detail > main > :nth-child(2) { animation-delay: 50ms; }
+.requester-detail > main > :nth-child(n+3) { animation-delay: 100ms; }
+.requester-detail > main > :nth-child(n+4) { animation-delay: 160ms; }
+.requester-detail > main > :nth-child(n+4) > * { animation: page-enter .4s cubic-bezier(.22, 1, .36, 1) backwards; animation-delay: 200ms; }
+.requester-detail > main > :nth-child(n+4) > aside { animation-delay: 280ms; }
+.request-status-badge { animation: badge-change .3s cubic-bezier(.22, 1, .36, 1) 250ms backwards; }
+.request-download, .request-attachment { transition: border-color .18s ease, box-shadow .18s ease, transform .18s ease, background-color .18s ease; }
+.request-download:not(:disabled):hover { border-color: #4f6fae; color: #4f6fae; box-shadow: 0 4px 12px #31456c14; }
+.request-download:not(:disabled):active { transform: scale(.97); }
+.request-attachment:hover { border-color: #7fa0d5; transform: translateY(-2px); box-shadow: 0 6px 16px #31456c12; }
+.request-waiting-card { animation: soft-pulse 2.4s ease-in-out 1s 2 backwards; }
+.requester-detail .approval-step-circle { animation: step-pop .45s cubic-bezier(.34, 1.4, .64, 1) backwards; animation-delay: calc(250ms + var(--i, 0) * 160ms); transition: transform .18s ease; }
+.requester-detail .approval-chain > li:hover .approval-step-circle { transform: scale(1.08); }
+.requester-detail .approval-step-text { animation: page-enter .4s cubic-bezier(.22, 1, .36, 1) backwards; animation-delay: calc(330ms + var(--i, 0) * 160ms); }
+.requester-detail .approval-step-connector { transform-origin: left center; animation: step-draw .35s ease-out backwards; animation-delay: calc(400ms + var(--i, 0) * 160ms); }
+.requester-detail .approval-step-circle.is-complete svg path { stroke-dasharray: 20; animation: check-draw .35s ease-out backwards; animation-delay: calc(500ms + var(--i, 0) * 160ms); }
+.requester-detail .approval-step-circle.is-rejected { animation: step-pop .45s cubic-bezier(.34, 1.4, .64, 1) backwards, step-shake .4s ease-in-out; animation-delay: calc(250ms + var(--i, 0) * 160ms), calc(700ms + var(--i, 0) * 160ms); }
+.requester-detail .approval-step-circle.is-current { animation: step-pop .45s cubic-bezier(.34, 1.4, .64, 1) backwards, step-ring 1.8s ease-out infinite; animation-delay: calc(250ms + var(--i, 0) * 160ms), calc(700ms + var(--i, 0) * 160ms); }
+@media (prefers-reduced-motion: reduce) {
+  .requester-detail > main > *, .requester-detail > main > :nth-child(n+4) > *, .request-status-badge, .request-waiting-card,
+  .requester-detail .approval-step-circle, .requester-detail .approval-step-text, .requester-detail .approval-step-connector,
+  .requester-detail .approval-step-circle.is-complete svg path { animation: none !important; }
+  .request-attachment:hover, .requester-detail .approval-chain > li:hover .approval-step-circle { transform: none; }
+}
 .requester-requests th { font-weight: 400; }
 .approver-header, .requester-header, .home-request-card, .dashboard-design, .pr-page, .auth-layout, .design-dialog { font-family: Inter, 'Noto Sans Thai', sans-serif; }
 .pr-heading h1, .home-requests h1, .home-request-card h2 { font-family: 'Noto Sans Thai', sans-serif; }
@@ -248,6 +290,7 @@
 .approval-file:hover { border-color: #b4423e66; box-shadow: 0 2px 8px #31456c14; }
 .approval-file:focus-visible { outline: 2px solid #4f6fae; outline-offset: 2px; }
 .approval-file-icon { position: relative; flex-shrink: 0; display: grid; place-items: center; width: 42px; height: 42px; color: #b4423e; }
+.approval-file-icon[data-type="JPG"] { color: #4f6fae; }
 .approval-file-icon b { position: absolute; left: 0; right: 0; bottom: 11px; font-family: 'Bai Jamjuree', sans-serif; font-size: 10px; font-weight: 600; line-height: 1; text-align: center; }
 .approval-file-text { display: grid; min-width: 0; }
 .approval-file-text strong { overflow: hidden; color: #31456c; font-family: 'Bai Jamjuree', 'Noto Sans Thai', sans-serif; font-size: 14px; font-weight: 600; line-height: 18px; text-overflow: ellipsis; white-space: nowrap; }
@@ -386,6 +429,18 @@
 .notification-row:nth-child(n+4) { animation-delay: 120ms; }
 .notification-row { transition: background-color .22s ease; }
 .notification-count { animation: badge-change .2s ease-out; }
+/* New notification: the bell swings, the badge bounces and a soft ripple spreads from it. */
+@keyframes bell-ring { 0%, 100% { transform: rotate(0); } 10% { transform: rotate(18deg); } 25% { transform: rotate(-16deg); } 40% { transform: rotate(12deg); } 55% { transform: rotate(-8deg); } 70% { transform: rotate(4deg); } 85% { transform: rotate(-2deg); } }
+@keyframes badge-bounce { 0% { transform: scale(.3); } 45% { transform: scale(1.35); } 70% { transform: scale(.9); } 100% { transform: scale(1); } }
+@keyframes badge-ripple { from { opacity: .55; transform: scale(1); } to { opacity: 0; transform: scale(2.4); } }
+.notification-button.is-ringing { color: #4f6fae; }
+.notification-button.is-ringing .notification-bell { transform-origin: 50% 10%; animation: bell-ring .9s ease-in-out; }
+.notification-button.is-ringing .notification-count { isolation: isolate; animation: badge-bounce .5s cubic-bezier(.34, 1.4, .64, 1); }
+.notification-button.is-ringing .notification-count::after { content: ''; position: absolute; inset: -2px; border-radius: inherit; background: #b4423e; animation: badge-ripple .9s ease-out 2; z-index: -1; }
+.notification-button { transition: color .3s ease, background-color .18s ease; }
+@media (prefers-reduced-motion: reduce) {
+  .notification-button.is-ringing .notification-bell, .notification-button.is-ringing .notification-count, .notification-button.is-ringing .notification-count::after { animation: none; }
+}
 .design-dialog { animation: pop-in .25s cubic-bezier(.22, 1, .36, 1); }
 .design-dialog::backdrop { animation: content-fade-in .2s ease-out; }
 .notification-tabs button, .notification-request, .notification-action button,

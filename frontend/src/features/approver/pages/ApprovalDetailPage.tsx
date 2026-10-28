@@ -66,11 +66,11 @@ function AttachmentsPanel({ requisition }: { requisition: Requisition }) {
     window.open(url, '_blank', 'noopener,noreferrer')
     setTimeout(() => URL.revokeObjectURL(url), 60_000)
   }
-  return <article className="approval-panel approval-attachments"><h2><Paperclip size={24} />เอกสารแนบ ({requisition.attachments.length} ไฟล์)</h2><div className="approval-file-list">{requisition.attachments.map(attachment => <button className="approval-file" type="button" key={attachment.id} title={attachment.file.name} onClick={() => open(attachment.file)}><span className="approval-file-icon" aria-hidden="true"><FileIcon size={42} strokeWidth={1.4} /><b>{fileLabel(attachment.file)}</b></span><span className="approval-file-text"><strong>{attachment.file.name}</strong><small>ขนาด {fileSize(attachment.file.size)}</small></span></button>)}</div></article>
+  return <article className="approval-panel approval-attachments"><h2><Paperclip size={24} />เอกสารแนบ ({requisition.attachments.length} ไฟล์)</h2><div className="approval-file-list">{requisition.attachments.map(attachment => <button className="approval-file" type="button" key={attachment.id} title={attachment.file.name} onClick={() => open(attachment.file)}><span className="approval-file-icon" data-type={fileLabel(attachment.file)} aria-hidden="true"><FileIcon size={42} strokeWidth={1.4} /><b>{fileLabel(attachment.file)}</b></span><span className="approval-file-text"><strong>{attachment.file.name}</strong><small>ขนาด {fileSize(attachment.file.size)}</small></span></button>)}</div></article>
 }
 
 function fileLabel(file: File) {
-  return file.type === 'application/pdf' ? 'PDF' : file.type === 'image/png' ? 'PNG' : file.type === 'image/jpeg' ? 'JPG' : (file.name.split('.').pop() || '').slice(0, 4).toUpperCase()
+  return file.type === 'application/pdf' ? 'PDF' : file.type === 'image/png' ? 'PNG' : file.type === 'image/jpeg' ? 'JPG' : (file.name.split('.').pop() || '').slice(0, 4).toUpperCase().replace('JPEG', 'JPG')
 }
 
 function fileSize(bytes: number) {

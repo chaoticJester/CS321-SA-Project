@@ -41,6 +41,12 @@ export function ApproverLanding({ employee, onSignOut }: { employee: Employee; o
     return () => { active = false }
   }, [employee.employee_id, queueVersion])
 
+  // Refresh the queue in the background so new requests reach the notification bell.
+  useEffect(() => {
+    const timer = window.setInterval(() => { if (document.visibilityState === 'visible') setQueueVersion(version => version + 1) }, 30_000)
+    return () => window.clearInterval(timer)
+  }, [])
+
   const queue = pending.map(item => {
     const days = daysWaiting(item.created_at, loadedAt)
     return { id: item.pr_no, prId: item.pr_id, subject: item.job_name || 'Purchase Requisition', owner: item.requester_name, amount: `฿${Number(item.total_amount).toLocaleString('en-US')}`, waiting: `รอมา ${days} วัน`, overdue: days >= 3 }
