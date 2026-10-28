@@ -27,7 +27,9 @@ export async function findPendingApprovalsForEmployee(
     `SELECT pr.pr_id, pr.pr_no, pr.job_name, pr.requester_id, pr.created_at, pr.require_date, pr.asset_type,
             requester.full_name AS requester_name,
             requester.department AS requester_department,
-            COALESCE(SUM(item.qty * item.unit_price), 0) AS total_amount
+            COALESCE(SUM(item.qty * item.unit_price), 0) AS total_amount,
+            (SELECT COUNT(*) FROM approval_log done WHERE done.pr_id = pr.pr_id AND done.job_action = 'approved') + 1 AS current_level,
+            (SELECT COUNT(*) FROM approval_log steps WHERE steps.pr_id = pr.pr_id) AS total_levels
      FROM approval_log al
      JOIN pr ON pr.pr_id = al.pr_id
      JOIN employee requester ON requester.employee_id = pr.requester_id

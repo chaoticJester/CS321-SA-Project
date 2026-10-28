@@ -7,8 +7,7 @@ import { PdfFrame, PdfToolbar } from '../../../components/PdfPreview'
 import { usePrPdf } from '../../../components/usePrPdf'
 import { getPrPdf, savePdf } from '../../../api'
 import { PrintableRequisition } from '../../requester/components/Review'
-import { Icon } from '../../../components/Icon'
-import { Eye, FileText, Paperclip, PenTool, ShieldCheck, ShoppingCart } from 'lucide-react'
+import { Eye, File as FileIcon, FileText, Paperclip, PenTool, ShieldCheck, ShoppingCart } from 'lucide-react'
 import { Status } from '../components/Status'
 
 type Props = {
@@ -67,7 +66,15 @@ function AttachmentsPanel({ requisition }: { requisition: Requisition }) {
     window.open(url, '_blank', 'noopener,noreferrer')
     setTimeout(() => URL.revokeObjectURL(url), 60_000)
   }
-  return <article className="approval-panel approval-attachments"><h2 className="flex items-center gap-3"><Paperclip size={22} />เอกสารแนบ ({requisition.attachments.length} ไฟล์)</h2><div className="approval-file-list">{requisition.attachments.map(attachment => <button className="approval-file" type="button" key={attachment.id} onClick={() => open(attachment.file)}><Icon name="file" /><span>{attachment.file.name}<small>ขนาด {Math.ceil(attachment.file.size / 1024)} KB</small></span></button>)}</div></article>
+  return <article className="approval-panel approval-attachments"><h2><Paperclip size={24} />เอกสารแนบ ({requisition.attachments.length} ไฟล์)</h2><div className="approval-file-list">{requisition.attachments.map(attachment => <button className="approval-file" type="button" key={attachment.id} title={attachment.file.name} onClick={() => open(attachment.file)}><span className="approval-file-icon" aria-hidden="true"><FileIcon size={42} strokeWidth={1.4} /><b>{fileLabel(attachment.file)}</b></span><span className="approval-file-text"><strong>{attachment.file.name}</strong><small>ขนาด {fileSize(attachment.file.size)}</small></span></button>)}</div></article>
+}
+
+function fileLabel(file: File) {
+  return file.type === 'application/pdf' ? 'PDF' : file.type === 'image/png' ? 'PNG' : file.type === 'image/jpeg' ? 'JPG' : (file.name.split('.').pop() || '').slice(0, 4).toUpperCase()
+}
+
+function fileSize(bytes: number) {
+  return bytes >= 1024 * 1024 ? `${(bytes / 1024 / 1024).toFixed(1)} MB` : `${Math.max(1, Math.round(bytes / 1024))} KB`
 }
 
 function RequestInfo({ employee, selected, requisition }: { employee: Employee; selected: PendingApproval | null; requisition: Requisition }) {

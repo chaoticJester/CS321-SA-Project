@@ -84,6 +84,7 @@ function sampleData(itemCount: number, scenario: Scenario = "pending"): PrPdfDat
       purpose:
         "ทดแทนเครื่องเดิมที่ใช้งานมานานกว่าห้าปี เครื่องเดิมทำงานช้าและไม่รองรับซอฟต์แวร์รุ่นใหม่ที่ฝ่ายเทคโนโลยีสารสนเทศต้องใช้ในการพัฒนาระบบภายในองค์กร",
       asset_type: "Office Supply",
+      budget_code: "26-23-ADM-072",
       vendor_name: "บริษัท ABC จำกัด",
       status: scenario as PrStatus,
       created_at: new Date("2026-09-20T09:00:00+07:00"),

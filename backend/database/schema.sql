@@ -36,6 +36,7 @@ CREATE TABLE pr (
     job_name        VARCHAR(150)    NULL,
     purpose         VARCHAR(255)    NULL,
     asset_type      VARCHAR(100)    NULL,
+    budget_code     VARCHAR(50)     NULL,
     vendor_name     VARCHAR(150)    NULL,
     status          VARCHAR(30)     NOT NULL DEFAULT 'pending',  
     created_at      DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -66,6 +67,7 @@ CREATE TABLE attachment (
     pr_id           VARCHAR(20)     NOT NULL,
     file_type       VARCHAR(50)     NULL,          
     file_path       VARCHAR(255)    NOT NULL,
+    file_name       VARCHAR(255)    NULL,
     uploaded_at     DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (attachment_id),
     CONSTRAINT fk_attachment_pr

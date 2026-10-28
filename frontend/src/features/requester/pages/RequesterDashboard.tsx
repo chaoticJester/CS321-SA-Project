@@ -52,7 +52,7 @@ export function RequesterDashboard({ onCreate, onMyRequests, onSignOut, onNotifi
           {visible.map(request => <article className="home-request-card" key={request.backendId || request.reference}>
             <div className="request-thumbnail" aria-hidden="true">{request.backendId ? <PdfThumbnail prId={request.backendId} /> : null}</div>
             <h2>{request.reference}</h2>
-            <p>{request.basic.job}</p>
+            <p title={request.basic.job}>{request.basic.job}</p>
             <button type="button" disabled={Boolean(opening)} onClick={() => void openPreview(request)}><Eye size={18} />{opening === request.backendId ? 'กำลังโหลด…' : 'ดูตัวอย่าง PDF'}</button>
           </article>)}
           {loading ? <p className="list-state" role="status">กำลังโหลดคำขอ…</p> : null}

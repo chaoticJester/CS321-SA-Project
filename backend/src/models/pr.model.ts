@@ -71,8 +71,8 @@ export async function insertPrAndItems(
     await connection.execute<ResultSetHeader>(
         `INSERT INTO pr (
       pr_id, pr_no, requester_id, require_date,
-      job_name, purpose, asset_type, vendor_name, status
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending')`,
+      job_name, purpose, asset_type, budget_code, vendor_name, status
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')`,
         [
             prId,
             prNo,
@@ -81,6 +81,7 @@ export async function insertPrAndItems(
             input.job_name ?? null,
             input.purpose ?? null,
             input.asset_type ?? null,
+            input.budget_code ?? null,
             input.vendor_name ?? null,
         ],
     );
@@ -114,7 +115,7 @@ export async function findPrById(
     `SELECT
       pr_id, pr_no, requester_id,
       DATE_FORMAT(require_date, '%Y-%m-%dT%H:%i:%sZ') AS require_date,
-      job_name, purpose, asset_type, vendor_name, status, created_at
+      job_name, purpose, asset_type, budget_code, vendor_name, status, created_at
     FROM pr
     WHERE pr_id = ?`,
     [prId],
@@ -137,6 +138,7 @@ export async function findPrById(
         pr_id,
         file_type,
         file_path,
+        file_name,
         uploaded_at
       FROM attachment
       WHERE pr_id = ?
@@ -163,14 +165,15 @@ export async function insertAttachment(
   prId: string,
   fileType: string,
   filePath: string,
+  fileName: string | null = null,
 ): Promise<string> {
   const attachmentId = `AT${randomBytes(8).toString("hex")}`;
 
   await pool.execute<ResultSetHeader>(
     `INSERT INTO attachment
-       (attachment_id, pr_id, file_type, file_path)
-     VALUES (?, ?, ?, ?)`,
-    [attachmentId, prId, fileType, filePath],
+       (attachment_id, pr_id, file_type, file_path, file_name)
+     VALUES (?, ?, ?, ?, ?)`,
+    [attachmentId, prId, fileType, filePath, fileName],
   );
   
   return attachmentId;
@@ -261,6 +264,7 @@ export async function findAttachmentById(
         pr_id,
         file_type,
         file_path,
+        file_name,
         uploaded_at
       FROM attachment
       WHERE pr_id = ?

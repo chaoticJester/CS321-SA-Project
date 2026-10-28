@@ -41,12 +41,13 @@ type ApiPr = {
   job_name: string | null
   purpose: string | null
   asset_type: string | null
+  budget_code?: string | null
   vendor_name: string | null
   status: 'pending' | 'approved' | 'rejected'
   created_at: string
   total_amount: number
   items: Array<{ item_id: string; description: string; qty: number; unit: string | null; unit_price: string }>
-  attachments?: Array<{ attachment_id: string; file_type: string; file_path: string }>
+  attachments?: Array<{ attachment_id: string; file_type: string; file_path: string; file_name: string | null }>
 }
 
 export type PendingApproval = {
@@ -60,6 +61,9 @@ export type PendingApproval = {
   require_date?: string
   requester_department?: string | null
   asset_type?: string | null
+  // Where this approver sits in the PR's chain (pending list only).
+  current_level?: number
+  total_levels?: number
 }
 
 export type ApprovalHistoryItem = PendingApproval & {
@@ -108,7 +112,7 @@ function toRequisition(pr: ApiPr, approval?: ApprovalStatus): Requisition {
       mainGroup: '',
       budgetType: pr.asset_type || '',
       requiredDate: pr.require_date.slice(0, 10),
-      budgetCode: '',
+      budgetCode: pr.budget_code || '',
       purpose: pr.purpose || '',
       line: '',
       description: '',
@@ -116,7 +120,7 @@ function toRequisition(pr: ApiPr, approval?: ApprovalStatus): Requisition {
     },
     items: (pr.items || []).map(item => ({
       id: item.item_id,
-      budgetCode: '',
+      budgetCode: pr.budget_code || '',
       name: item.description,
       brand: '',
       model: '',
@@ -151,7 +155,7 @@ export async function getPr(prId: string): Promise<Requisition> {
       const response = await fetch(`${API_BASE}/pr/${encodeURIComponent(prId)}/attachments/${encodeURIComponent(attachment.attachment_id)}/download`, { headers: session ? { Authorization: `Bearer ${session.token}` } : {} })
       if (!response.ok) throw new Error('ไม่สามารถโหลดเอกสารแนบได้')
       const blob = await response.blob()
-      return { id: attachment.attachment_id, file: new File([blob], attachment.file_path, { type: attachment.file_type }) }
+      return { id: attachment.attachment_id, file: new File([blob], attachment.file_name || attachment.file_path, { type: attachment.file_type }) }
     })),
   ])
   return { ...value, requester, attachments }
@@ -239,6 +243,7 @@ function toPrBody(value: Requisition) {
     job_name: value.basic.job,
     purpose: value.basic.purpose,
     asset_type: value.basic.budgetType || value.basic.mainGroup,
+    budget_code: value.basic.budgetCode,
     vendor_name: value.purchaser,
     items: value.items.map(item => ({
       description: [item.name, item.brand, item.model, item.detail].filter(Boolean).join(' · '),

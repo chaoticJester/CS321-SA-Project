@@ -546,6 +546,7 @@ export async function buildDraftPdfData(input: CreatePrInput): Promise<PrPdfData
     job_name: input.job_name ?? null,
     purpose: input.purpose ?? null,
     asset_type: input.asset_type ?? null,
+    budget_code: input.budget_code ?? null,
     vendor_name: input.vendor_name ?? null,
     status: "pending",
     created_at: new Date(),
@@ -573,11 +574,11 @@ async function buildPdfData(pr: PrWithItems, approvals: ApprovalStepWithSignatur
       site: null, // not in the DB yet
       line: null, // not in the DB yet
     },
-    // Not in the DB yet -> printed as "-".
+    // Fields not in the DB yet are null and printed as "-".
     extra: {
       main_group: null,
       budget_type: null,
-      budget_code: null,
+      budget_code: pr.budget_code,
       budget_description: null,
       remark: null,
       purchaser_section: null,

@@ -1,15 +1,11 @@
 import fs from "fs";
 import path from "path";
-import { randomBytes } from "crypto";
-import PDFDocument from "pdfkit";
 import type { RowDataPacket } from "mysql2";
 import pool from "../config/db";
-import { insertAttachment } from "../models/pr.model";
 import { approvePr, rejectPr } from "../services/approval.service";
 import { createPr } from "../services/pr.service";
 import { reservePrNumber } from "../services/pr-number.service";
 import type { PrItemInput } from "../types/pr";
-import { FONT, drawLine, lineHeight, type TextStyle } from "../utils/pdfText";
 
 // Rebuild the database with realistic demo PRs for the presentation.
 //
@@ -19,45 +15,19 @@ import { FONT, drawLine, lineHeight, type TextStyle } from "../utils/pdfText";
 // then creates the PRs below through the real services (number reservation ->
 // createPr -> approvePr / rejectPr), so numbers, approval chains and signatures
 // follow the same rules as the website. Employees and approval levels are kept.
-// Prices are market prices in THB excluding VAT; vendors on the quotations are fictional.
+// Prices are market prices in THB excluding VAT. No attachments are created.
 
 const REQUESTER = "E0020";
 const UPLOAD_DIR = path.resolve(__dirname, "../../uploads");
-const FONT_DIR = path.resolve(__dirname, "../../assets/fonts");
-const MIGRATION = path.resolve(__dirname, "../../database/add_pr_number_reservations.sql");
+const MIGRATIONS = [
+  { table: "pr_number_counter", file: "add_pr_number_reservations.sql" },
+  { table: "attachment", column: "file_name", file: "add_attachment_file_name.sql" },
+  { table: "pr", column: "budget_code", file: "add_pr_budget_code.sql" },
+];
 
 // Approver of each level in seed_data.sql.
 const APPROVER = { LV1: "E0018", LV2: "E0017", LV3: "E0015", LV4: "E0010", LV5: "E0005", LV6: "E0002" } as const;
 type Level = keyof typeof APPROVER;
-
-interface Vendor {
-  name: string;
-  address: string;
-  taxId: string;
-  phone: string;
-}
-
-// Fictional vendors for the quotation attachments.
-const VENDOR = {
-  techmart: {
-    name: "บริษัท เทคมาร์ท โซลูชั่นส์ จำกัด",
-    address: "88/12 ถนนรามคำแหง แขวงหัวหมาก เขตบางกะปิ กรุงเทพฯ 10240",
-    taxId: "0105561023457",
-    phone: "02-318-4470",
-  },
-  netlink: {
-    name: "บริษัท เน็ตลิงก์ ซิสเต็มส์ จำกัด",
-    address: "45 ซอยลาดพร้าว 71 แขวงสะพานสอง เขตวังทองหลาง กรุงเทพฯ 10310",
-    taxId: "0105559087132",
-    phone: "02-530-2288",
-  },
-  officeplus: {
-    name: "บริษัท ออฟฟิศพลัส ซัพพลาย จำกัด",
-    address: "199 ถนนบางนา-ตราด กม.3 แขวงบางนา เขตบางนา กรุงเทพฯ 10260",
-    taxId: "0105563041986",
-    phone: "02-744-9150",
-  },
-} satisfies Record<string, Vendor>;
 
 interface Decision {
   level: Level;
@@ -71,8 +41,9 @@ interface DemoPr {
   job: string;
   purpose: string;
   budgetType: "Investment Budget" | "Expense Budget";
+  // One of the codes the form offers for this budget type (frontend/src/formOptions.ts).
+  budgetCode: string;
   purchaser: string;
-  vendor: Vendor;
   items: PrItemInput[];
   // Decisions taken so far, in chain order. Levels after the last one stay pending.
   decisions: Decision[];
@@ -86,8 +57,8 @@ const DEMO: DemoPr[] = [
     job: "จัดซื้อโน้ตบุ๊กสำหรับพนักงานใหม่ ฝ่ายบัญชี",
     purpose: "รองรับพนักงานบัญชีที่เริ่มงานเดือนกันยายน 3 ตำแหน่ง ตามแผนอัตรากำลังปี 2569",
     budgetType: "Investment Budget",
+    budgetCode: "26-23-ADM-072",
     purchaser: "PURCHASING 1 (HO)",
-    vendor: VENDOR.techmart,
     items: [
       { description: "โน้ตบุ๊ก · Dell · Latitude 5450 · Intel Core Ultra 5 125U / RAM 16GB / SSD 512GB / 14\" FHD / Windows 11 Pro", qty: 3, unit: "เครื่อง", unit_price: 32900 },
       { description: "กระเป๋าโน้ตบุ๊ก · Dell · Pro Backpack 15 (CP5723) · สำหรับจอ 15 นิ้ว", qty: 3, unit: "ใบ", unit_price: 1290 },
@@ -103,30 +74,30 @@ const DEMO: DemoPr[] = [
   {
     createdAt: "2026-08-19 10:45",
     requireDate: "2026-09-01",
-    job: "ต่ออายุ Microsoft 365 Business Standard ปี 2569-2570",
-    purpose: "ต่ออายุไลเซนส์อีเมลและ Office สำหรับพนักงาน 25 คน ที่จะหมดอายุ 31 ส.ค. 2569",
+    job: "ต่ออายุ Microsoft 365 E3 สำหรับผู้บริหารและฝ่ายวางแผน",
+    purpose: "ไลเซนส์ M365 Enterprise ของผู้ใช้ 8 คน จะหมดอายุ 31 ส.ค. 2569",
     budgetType: "Investment Budget",
+    budgetCode: "26-23-ADM-074",
     purchaser: "INFRASTRUCTURE SYSTEM",
-    vendor: VENDOR.techmart,
     items: [
-      { description: "ไลเซนส์ · Microsoft · 365 Business Standard · รายปี 12 เดือน", qty: 25, unit: "ไลเซนส์", unit_price: 4470 },
+      { description: "ไลเซนส์ · Microsoft · 365 E3 · รายปี 12 เดือน / 1 ผู้ใช้", qty: 8, unit: "ไลเซนส์", unit_price: 15300 },
     ],
     decisions: [
       { level: "LV1", at: "2026-08-19 15:10" },
       { level: "LV2", at: "2026-08-20 09:25" },
-      { level: "LV3", at: "2026-08-21 13:50", reject: "ขอให้เปรียบเทียบราคากับแพ็กเกจ M365 Enterprise ที่สำนักงานใหญ่ใช้อยู่ และแนบใบเสนอราคาอย่างน้อย 2 ราย" },
+      { level: "LV3", at: "2026-08-21 13:50", reject: "ผู้ใช้ 3 คนใช้เพียงอีเมลและ Teams ขอให้ปรับเป็น M365 Business Basic แล้วส่งคำขอใหม่" },
     ],
   },
   {
     createdAt: "2026-09-02 08:55",
     requireDate: "2026-09-20",
-    job: "เปลี่ยนเครื่องสำรองไฟ (UPS) ห้อง Server",
-    purpose: "แบตเตอรี่ UPS เดิมเสื่อมสภาพ สำรองไฟได้ไม่ถึง 3 นาที เสี่ยงต่อระบบ ERP และไฟล์เซิร์ฟเวอร์",
+    job: "Windows Server Device CAL สำหรับเครื่องลูกข่ายสาขาใหม่",
+    purpose: "เครื่องคอมพิวเตอร์ 20 เครื่องของสาขาใหม่ต้องเชื่อมต่อ File Server และ Active Directory",
     budgetType: "Investment Budget",
+    budgetCode: "26-23-ADM-073",
     purchaser: "INFRASTRUCTURE SYSTEM",
-    vendor: VENDOR.netlink,
     items: [
-      { description: "เครื่องสำรองไฟ · APC · Smart-UPS SMT1500IC · 1500VA/1000W พร้อม SmartConnect", qty: 2, unit: "เครื่อง", unit_price: 23900 },
+      { description: "ไลเซนส์ · Microsoft · Windows Server 2022 Device CAL · แบบถาวร 1 เครื่อง", qty: 20, unit: "ไลเซนส์", unit_price: 1450 },
     ],
     decisions: [
       { level: "LV1", at: "2026-09-02 11:30" },
@@ -137,106 +108,109 @@ const DEMO: DemoPr[] = [
   {
     createdAt: "2026-09-15 13:20",
     requireDate: "2026-10-01",
-    job: "จอภาพเพิ่มเติมสำหรับฝ่ายวางแผนการผลิต",
-    purpose: "ติดตั้งจอที่สองให้พนักงานวางแผนการผลิต 6 คน เพื่อเปิดตารางแผนผลิตและ ERP พร้อมกัน",
-    budgetType: "Investment Budget",
-    purchaser: "PURCHASING 1 (HO)",
-    vendor: VENDOR.techmart,
+    job: "หนังสือพิมพ์และหนังสือประกอบการเรียนรู้ ห้องสมุดสำนักงาน",
+    purpose: "สมาชิกหนังสือพิมพ์รายปีสำหรับห้องรับรอง และหนังสือสำหรับกิจกรรม Knowledge Sharing",
+    budgetType: "Expense Budget",
+    budgetCode: "26-99-1000-BOO-2-901-001-00",
+    purchaser: "GENERAL ADMINISTRATION 1",
     items: [
-      { description: "จอภาพ · Dell · P2425H · 23.8\" IPS FHD 100Hz พร้อมขาปรับระดับ", qty: 6, unit: "จอ", unit_price: 5290 },
+      { description: "สมาชิกหนังสือพิมพ์ · Bangkok Post · ฉบับพิมพ์ รายปี 12 เดือน", qty: 1, unit: "ปี", unit_price: 4380 },
+      { description: "สมาชิกหนังสือพิมพ์ · กรุงเทพธุรกิจ · ฉบับพิมพ์ รายปี 12 เดือน", qty: 1, unit: "ปี", unit_price: 3000 },
+      { description: "หนังสือ · วิถีแห่งโตโยต้า (The Toyota Way) · ฉบับภาษาไทย", qty: 5, unit: "เล่ม", unit_price: 395 },
     ],
     decisions: [
       { level: "LV1", at: "2026-09-15 16:00" },
       { level: "LV2", at: "2026-09-16 09:15" },
-      { level: "LV3", at: "2026-09-17 11:45" },
     ],
   },
   {
     createdAt: "2026-09-24 09:30",
-    requireDate: "2026-10-05",
-    job: "หมึกพิมพ์เลเซอร์สำหรับไตรมาส 4",
-    purpose: "สำรองหมึกเครื่องพิมพ์ HP LaserJet Pro ของฝ่ายธุรการและบัญชี",
+    requireDate: "2026-11-02",
+    job: "เสื้อและป้ายประชาสัมพันธ์งาน Quality Month 2569",
+    purpose: "ใช้ในงาน Quality Month เดือนพฤศจิกายน สำหรับคณะทำงาน 60 คน",
     budgetType: "Expense Budget",
+    budgetCode: "26-99-1000-ACT-2-901-001-00",
     purchaser: "GENERAL ADMINISTRATION 1",
-    vendor: VENDOR.officeplus,
     items: [
-      { description: "ตลับหมึก · HP · 151A (W1510A) · สีดำ ของแท้", qty: 6, unit: "ตลับ", unit_price: 2650 },
+      { description: "เสื้อโปโล · Grand Sport · 012-777 · ปักโลโก้ Quality Month คละไซซ์", qty: 60, unit: "ตัว", unit_price: 320 },
+      { description: "ป้ายไวนิล · ขนาด 1.2 x 3 ม. · พิมพ์ 4 สี พร้อมเจาะตาไก่", qty: 3, unit: "ป้าย", unit_price: 900 },
     ],
     decisions: [
       { level: "LV1", at: "2026-09-24 13:40" },
-      { level: "LV2", at: "2026-09-25 10:20", reject: "หมึกคงคลังยังเพียงพอถึงสิ้นเดือน พ.ย. กรุณาส่งคำขอใหม่ต้นเดือน ธ.ค." },
+      { level: "LV2", at: "2026-09-25 10:20", reject: "ปีนี้ HR สั่งเสื้อกิจกรรมให้ทั้งบริษัทแล้ว ขอให้ตัดรายการเสื้อออกแล้วส่งคำขอใหม่" },
     ],
   },
   {
     createdAt: "2026-10-06 10:10",
-    requireDate: "2026-11-10",
-    job: "ขยายระบบเครือข่าย LAN ชั้น 3 (ห้องฝึกอบรม)",
-    purpose: "เดินสาย LAN และเพิ่ม Switch PoE รองรับเครื่องคอมพิวเตอร์ห้องฝึกอบรม 40 จุด",
-    budgetType: "Investment Budget",
-    purchaser: "INFRASTRUCTURE SYSTEM",
-    vendor: VENDOR.netlink,
-    items: [
-      { description: "สวิตช์ · Cisco · CBS350-24P-4G · 24 พอร์ต Gigabit PoE+ 195W / 4 SFP", qty: 2, unit: "เครื่อง", unit_price: 21500 },
-      { description: "สาย LAN · LINK · US-9106 · CAT6 UTP ภายในอาคาร ม้วน 305 ม.", qty: 2, unit: "กล่อง", unit_price: 3450 },
-    ],
-    decisions: [
-      { level: "LV1", at: "2026-10-06 14:25" },
-      { level: "LV2", at: "2026-10-08 09:50" },
-    ],
-  },
-  {
-    createdAt: "2026-10-14 11:05",
     requireDate: "2026-11-15",
     job: "ต่ออายุโปรแกรมป้องกันไวรัส ESET PROTECT",
     purpose: "ไลเซนส์ Antivirus เดิม 50 เครื่องจะหมดอายุ 30 พ.ย. 2569",
     budgetType: "Investment Budget",
+    budgetCode: "26-23-ADM-076",
     purchaser: "INFRASTRUCTURE SYSTEM",
-    vendor: VENDOR.netlink,
     items: [
       { description: "ไลเซนส์ · ESET · PROTECT Entry · 1 ปี / 1 เครื่อง", qty: 50, unit: "ไลเซนส์", unit_price: 1150 },
     ],
     decisions: [
+      { level: "LV1", at: "2026-10-06 14:25" },
+      { level: "LV2", at: "2026-10-07 09:50" },
+      { level: "LV3", at: "2026-10-08 15:10" },
+    ],
+  },
+  {
+    createdAt: "2026-10-14 11:05",
+    requireDate: "2026-11-25",
+    job: "เช่ารถบัสศึกษาดูงานโรงงานต้นแบบ",
+    purpose: "พาพนักงาน 70 คนศึกษาดูงานระบบ Lean ที่นิคมอุตสาหกรรมอมตะซิตี้ ชลบุรี 1 วัน",
+    budgetType: "Expense Budget",
+    budgetCode: "26-99-1000-BUS-2-901-001-00",
+    purchaser: "PERSONNEL ADMINISTRATION",
+    items: [
+      { description: "รถบัสปรับอากาศ · 40 ที่นั่ง · ไป-กลับ กรุงเทพฯ-ชลบุรี 1 วัน รวมน้ำมันและคนขับ", qty: 2, unit: "คัน", unit_price: 14500 },
+    ],
+    decisions: [
       { level: "LV1", at: "2026-10-14 15:30" },
       { level: "LV2", at: "2026-10-15 10:10" },
-      { level: "LV3", at: "2026-10-16 14:45" },
     ],
   },
   {
     createdAt: "2026-10-21 09:40",
-    requireDate: "2026-11-05",
-    job: "เมาส์และคีย์บอร์ดทดแทนชุดที่ชำรุด",
-    purpose: "ทดแทนอุปกรณ์ที่ชำรุดจากการแจ้งซ่อมเดือน ก.ย.-ต.ค. จำนวน 10 ชุด",
-    budgetType: "Expense Budget",
-    purchaser: "GENERAL ADMINISTRATION 1",
-    vendor: VENDOR.officeplus,
+    requireDate: "2026-12-01",
+    job: "ต่ออายุ Microsoft Teams Enterprise ฝ่ายขายและฝ่ายผลิต",
+    purpose: "ใช้ประชุมออนไลน์กับลูกค้าและโรงงานในเครือ ผู้ใช้ 30 คน",
+    budgetType: "Investment Budget",
+    budgetCode: "26-23-ADM-075",
+    purchaser: "INFRASTRUCTURE SYSTEM",
     items: [
-      { description: "ชุดคีย์บอร์ดและเมาส์ไร้สาย · Logitech · MK295 Silent · แป้นภาษาไทย/อังกฤษ", qty: 10, unit: "ชุด", unit_price: 790 },
+      { description: "ไลเซนส์ · Microsoft · Teams Enterprise · รายปี 12 เดือน / 1 ผู้ใช้", qty: 30, unit: "ไลเซนส์", unit_price: 2350 },
     ],
     decisions: [{ level: "LV1", at: "2026-10-21 13:15" }],
   },
   {
     createdAt: "2026-10-26 14:20",
     requireDate: "2026-11-20",
-    job: "Access Point Wi-Fi ห้องประชุมใหญ่",
-    purpose: "สัญญาณ Wi-Fi ไม่เพียงพอเมื่อมีผู้เข้าประชุมเกิน 30 คน",
-    budgetType: "Investment Budget",
-    purchaser: "INFRASTRUCTURE SYSTEM",
-    vendor: VENDOR.netlink,
+    job: "อุปกรณ์และรางวัลการประกวด QCC ภายใน ครั้งที่ 2/2569",
+    purpose: "ใช้ในการนำเสนอและมอบรางวัลทีม QCC 6 ทีม",
+    budgetType: "Expense Budget",
+    budgetCode: "26-99-1000-ACT-2-901-003-00",
+    purchaser: "EDUCATION & TRAINING",
     items: [
-      { description: "Access Point · Ubiquiti · UniFi U7 Pro · Wi-Fi 7 รองรับ 6GHz", qty: 3, unit: "ตัว", unit_price: 7590 },
+      { description: "ถ้วยรางวัล · โลหะชุบทอง สูง 14 นิ้ว · พร้อมป้ายสลักชื่อ", qty: 3, unit: "ใบ", unit_price: 850 },
+      { description: "ขาตั้งบอร์ดนำเสนอ · Flip Chart · ขนาด 70 x 100 ซม. ปรับระดับได้", qty: 6, unit: "ชุด", unit_price: 1290 },
+      { description: "กระดาษชาร์ตและปากกาเคมี · คละสี · สำหรับ 6 ทีม", qty: 1, unit: "ชุด", unit_price: 1500 },
     ],
     decisions: [],
   },
   {
     createdAt: "2026-10-27 10:35",
     requireDate: "2026-11-30",
-    job: "โน้ตบุ๊กทดแทนเครื่องเก่า ฝ่ายขาย",
-    purpose: "ทดแทนเครื่องอายุการใช้งานเกิน 6 ปี จำนวน 2 เครื่อง (แบตเตอรี่เสื่อม ซ่อมไม่คุ้มค่า)",
-    budgetType: "Investment Budget",
-    purchaser: "PURCHASING 1 (HO)",
-    vendor: VENDOR.techmart,
+    job: "บัตรของขวัญรางวัลโครงการข้อเสนอแนะ ไตรมาส 3",
+    purpose: "มอบให้พนักงาน 16 คนที่ข้อเสนอแนะผ่านการคัดเลือกและนำไปใช้จริง",
+    budgetType: "Expense Budget",
+    budgetCode: "26-99-1000-ACT-2-901-002-00",
+    purchaser: "HR PLANNING & DEVELOPMENT",
     items: [
-      { description: "โน้ตบุ๊ก · Lenovo · ThinkPad E14 Gen 6 · Intel Core i5-1335U / RAM 16GB / SSD 512GB / Windows 11 Pro", qty: 2, unit: "เครื่อง", unit_price: 27900 },
+      { description: "บัตรของขวัญ · Central Gift Card · มูลค่า 500 บาท", qty: 16, unit: "ใบ", unit_price: 500 },
     ],
     decisions: [],
   },
@@ -246,15 +220,20 @@ function at(value: string): Date {
   return new Date(`${value.replace(" ", "T")}:00+07:00`);
 }
 
-async function ensureReservationTables(): Promise<void> {
-  const [rows] = await pool.query<RowDataPacket[]>("SHOW TABLES LIKE 'pr_number_counter'");
-  if (rows.length) return;
-  console.log("Applying database/add_pr_number_reservations.sql ...");
-  const statements = fs.readFileSync(MIGRATION, "utf8")
-    .split(";")
-    .map((statement) => statement.replace(/^\s*--.*$/gm, "").trim())
-    .filter((statement) => statement && !/^USE\s/i.test(statement));
-  for (const statement of statements) await pool.query(statement);
+// Apply the migrations under database/ that this database has not had yet.
+async function applyMissingMigrations(): Promise<void> {
+  for (const migration of MIGRATIONS) {
+    const [rows] = "column" in migration
+      ? await pool.query<RowDataPacket[]>(`SHOW COLUMNS FROM ${migration.table} LIKE ?`, [migration.column])
+      : await pool.query<RowDataPacket[]>("SHOW TABLES LIKE ?", [migration.table]);
+    if (rows.length) continue;
+    console.log(`Applying database/${migration.file} ...`);
+    const statements = fs.readFileSync(path.resolve(__dirname, "../../database", migration.file), "utf8")
+      .split(";")
+      .map((statement) => statement.replace(/^\s*--.*$/gm, "").trim())
+      .filter((statement) => statement && !/^USE\s/i.test(statement));
+    for (const statement of statements) await pool.query(statement);
+  }
 }
 
 async function resetPrData(): Promise<void> {
@@ -273,101 +252,7 @@ async function resetPrData(): Promise<void> {
 
 const money = new Intl.NumberFormat("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-function quotationPdf(pr: DemoPr, prNo: string, quotationNo: string): Promise<Buffer> {
-  return new Promise((resolve, reject) => {
-    const doc = new PDFDocument({ size: "A4", margin: 50, info: { Title: `Quotation ${quotationNo}` } });
-    doc.registerFont(FONT.thai, path.join(FONT_DIR, "BaiJamjuree-Regular.ttf"));
-    doc.registerFont(FONT.thaiBold, path.join(FONT_DIR, "BaiJamjuree-SemiBold.ttf"));
-    doc.registerFont(FONT.latin, path.join(FONT_DIR, "Inter-Regular.ttf"));
-    doc.registerFont(FONT.latinBold, path.join(FONT_DIR, "Inter-SemiBold.ttf"));
-    const chunks: Buffer[] = [];
-    doc.on("data", (chunk: Buffer) => chunks.push(chunk));
-    doc.on("end", () => resolve(Buffer.concat(chunks)));
-    doc.on("error", reject);
-
-    const left = 50;
-    const width = doc.page.width - 100;
-    const body: TextStyle = { size: 10 };
-    const small: TextStyle = { size: 9, color: "#555" };
-    const bold: TextStyle = { size: 10, bold: true };
-    let y = 50;
-    const line = (text: string, style: TextStyle, opts: { width?: number; align?: "left" | "right" | "center" } = {}, x = left) => drawLine(doc, text, x, y, style, opts);
-
-    line(pr.vendor.name, { size: 15, bold: true, color: "#1f3b70" });
-    line("ใบเสนอราคา / QUOTATION", { size: 15, bold: true, color: "#1f3b70" }, { width, align: "right" });
-    y += 24;
-    line(pr.vendor.address, small);
-    y += 14;
-    line(`เลขประจำตัวผู้เสียภาษี ${pr.vendor.taxId} · โทร ${pr.vendor.phone}`, small);
-    y += 26;
-    doc.moveTo(left, y).lineTo(left + width, y).strokeColor("#1f3b70").lineWidth(1).stroke();
-    y += 12;
-
-    const issued = at(pr.createdAt);
-    issued.setDate(issued.getDate() - 3);
-    const date = issued.toLocaleDateString("en-GB", { timeZone: "Asia/Bangkok" });
-    line(`เรียน: ${process.env.COMPANY_NAME || "บริษัทตัวอย่าง จำกัด"} (ฝ่าย IT)`, body);
-    line(`เลขที่: ${quotationNo}`, body, { width, align: "right" });
-    y += 16;
-    line(`เรื่อง: ${pr.job}`, body);
-    line(`วันที่: ${date}`, body, { width, align: "right" });
-    y += 16;
-    line(`อ้างอิง: ${prNo}`, body);
-    line("ยืนราคา: 30 วัน", body, { width, align: "right" });
-    y += 26;
-
-    const cols = [
-      { title: "ลำดับ", width: 36, align: "center" as const },
-      { title: "รายการ", width: width - 36 - 50 - 80 - 90, align: "left" as const },
-      { title: "จำนวน", width: 50, align: "right" as const },
-      { title: "ราคา/หน่วย", width: 80, align: "right" as const },
-      { title: "จำนวนเงิน", width: 90, align: "right" as const },
-    ];
-    const cell = (values: string[], style: TextStyle, height: number) => {
-      let x = left;
-      values.forEach((value, i) => {
-        drawLine(doc, value, x + 5, y + (height - lineHeight(doc, style)) / 2, style, { width: cols[i]!.width - 10, align: cols[i]!.align });
-        x += cols[i]!.width;
-      });
-    };
-    doc.rect(left, y, width, 22).fill("#e8eef8");
-    cell(cols.map((c) => c.title), bold, 22);
-    y += 22;
-    let subtotal = 0;
-    pr.items.forEach((item, i) => {
-      const amount = item.qty * item.unit_price;
-      subtotal += amount;
-      const parts = item.description.split(" · ");
-      const name = `${parts[1]} ${parts[2]}`;
-      cell([String(i + 1), name, `${item.qty} ${item.unit}`, money.format(item.unit_price), money.format(amount)], body, 20);
-      y += 18;
-      drawLine(doc, parts.slice(3).join(" · ") || parts[0]!, left + cols[0]!.width + 5, y, small);
-      y += 18;
-      doc.moveTo(left, y).lineTo(left + width, y).strokeColor("#d5dbe5").lineWidth(0.5).stroke();
-    });
-    y += 10;
-    const vat = Math.round(subtotal * 7) / 100;
-    for (const [label, value, style] of [
-      ["รวมเป็นเงิน", subtotal, body],
-      ["ภาษีมูลค่าเพิ่ม 7%", vat, body],
-      ["ยอดรวมทั้งสิ้น", subtotal + vat, bold],
-    ] as const) {
-      line(label, style, { width: width - 110, align: "right" });
-      line(`${money.format(value)} บาท`, style, { width, align: "right" });
-      y += 18;
-    }
-    y += 20;
-    line("เงื่อนไข: ชำระเงินภายใน 30 วันหลังส่งมอบ · ส่งมอบภายใน 7-14 วันหลังได้รับใบสั่งซื้อ · รับประกันตามเงื่อนไขผู้ผลิต", small);
-    y += 60;
-    line("ผู้เสนอราคา ______________________", body, { width, align: "right" });
-    y += 16;
-    line("ฝ่ายขายองค์กร", small, { width: width - 40, align: "right" });
-
-    doc.end();
-  });
-}
-
-async function seedPr(pr: DemoPr, index: number): Promise<string> {
+async function seedPr(pr: DemoPr): Promise<string> {
   const reservation = await reservePrNumber(REQUESTER);
   const prId = await createPr(
     {
@@ -376,17 +261,12 @@ async function seedPr(pr: DemoPr, index: number): Promise<string> {
       job_name: pr.job,
       purpose: pr.purpose,
       asset_type: pr.budgetType,
+      budget_code: pr.budgetCode,
       vendor_name: pr.purchaser,
       items: pr.items,
     },
     reservation.reservation_id,
   );
-
-  // Quotation from the vendor, attached the same way as an upload from the website.
-  const fileName = `${randomBytes(16).toString("hex")}.pdf`;
-  const quotationNo = `QT-${pr.createdAt.slice(2, 4)}${pr.createdAt.slice(5, 7)}-${String(index + 101).padStart(4, "0")}`;
-  fs.writeFileSync(path.join(UPLOAD_DIR, fileName), await quotationPdf(pr, reservation.pr_no, quotationNo));
-  await insertAttachment(prId, "application/pdf", fileName);
 
   for (const decision of pr.decisions) {
     const approver = APPROVER[decision.level];
@@ -399,7 +279,6 @@ async function seedPr(pr: DemoPr, index: number): Promise<string> {
   const created = at(pr.createdAt);
   await pool.query("UPDATE pr SET created_at = ? WHERE pr_id = ?", [created, prId]);
   await pool.query("UPDATE approval_log SET created_at = ? WHERE pr_id = ?", [created, prId]);
-  await pool.query("UPDATE attachment SET uploaded_at = ? WHERE pr_id = ?", [created, prId]);
   await pool.query("UPDATE pr_number_reservation SET created_at = ?, used_at = ? WHERE reservation_id = ?", [created, created, reservation.reservation_id]);
 
   const [[status]] = await pool.query<RowDataPacket[]>("SELECT status FROM pr WHERE pr_id = ?", [prId]);
@@ -421,9 +300,9 @@ async function main(): Promise<void> {
   }
 
   fs.mkdirSync(UPLOAD_DIR, { recursive: true });
-  await ensureReservationTables();
+  await applyMissingMigrations();
   await resetPrData();
-  for (const [index, pr] of DEMO.entries()) await seedPr(pr, index);
+  for (const pr of DEMO) await seedPr(pr);
   console.log(`\nSeeded ${DEMO.length} PRs for ${REQUESTER}. The next PR created on the website will be IT-${String(DEMO.length + 1).padStart(3, "0")}-PR.`);
 }
 

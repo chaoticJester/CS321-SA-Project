@@ -110,6 +110,7 @@ export function parsePrInput(data: Record<string, unknown>, requesterId: string)
     job_name: 150,
     purpose: 255,
     asset_type: 100,
+    budget_code: 50,
     vendor_name: 150,
   } as const;
 
@@ -130,6 +131,7 @@ export function parsePrInput(data: Record<string, unknown>, requesterId: string)
     job_name: data.job_name as string | undefined,
     purpose: data.purpose as string | undefined,
     asset_type: data.asset_type as string | undefined,
+    budget_code: data.budget_code as string | undefined,
     vendor_name: data.vendor_name as string | undefined,
     items: data.items as CreatePrInput["items"],
   };
@@ -230,6 +232,8 @@ export async function addPrAttachment(
       req.params.id as string,
       file.mimetype,
       file.filename,
+      // Multer reads the multipart file name as latin1; Thai names need it decoded as UTF-8.
+      Buffer.from(file.originalname, "latin1").toString("utf8").slice(0, 255),
     );
 
     res.status(201).json({
@@ -410,6 +414,7 @@ export async function downloadPrAttachment(
     );
 
     const downloadName =
+      attachment.file_name ||
       `${prId}-${attachment.attachment_id}${extension}`;
 
     res.download(

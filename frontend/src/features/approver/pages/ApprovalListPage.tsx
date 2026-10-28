@@ -1,8 +1,25 @@
 import { useState } from 'react'
+import { Clock, Eye, TriangleAlert } from 'lucide-react'
 import type { ApprovalHistoryItem, PendingApproval } from '../../../api'
 import { PolishedSelect } from '../../../components/PolishedSelect'
 import type { ApproverView } from '../types'
 import { Status } from '../components/Status'
+
+// A request needed within this many days is flagged as urgent, as in the Figma list.
+const URGENT_DAYS = 3
+
+function daysLeft(date?: string) {
+  if (!date) return null
+  const due = new Date(date)
+  const today = new Date()
+  return Math.round((Date.UTC(due.getFullYear(), due.getMonth(), due.getDate()) - Date.UTC(today.getFullYear(), today.getMonth(), today.getDate())) / 86_400_000)
+}
+
+function PendingStatus({ item }: { item: PendingApproval }) {
+  const days = daysLeft(item.require_date)
+  if (days !== null && days <= URGENT_DAYS) return <div className="approval-cell approval-status-stack"><span className="approval-badge is-urgent"><TriangleAlert size={18} aria-hidden="true" />เร่งด่วน</span><span className="approval-chip is-urgent">{days < 0 ? `เกินกำหนด ${-days} วัน` : days === 0 ? 'ครบกำหนดวันนี้' : `เหลือเวลา ${days} วัน`}</span></div>
+  return <div className="approval-cell approval-status-stack"><span className="approval-badge"><Clock size={18} aria-hidden="true" />รอการอนุมัติจากคุณ</span>{item.total_levels ? <span className="approval-chip">ระดับ {item.current_level} จาก {item.total_levels}</span> : null}</div>
+}
 
 function isHistoryItem(item: PendingApproval | ApprovalHistoryItem): item is ApprovalHistoryItem {
   return 'decision' in item
@@ -42,10 +59,10 @@ export function ApprovalListPage({ view, pending, history, loading, error, onVie
     <div className="table-frame"><table className="approval-table"><thead><tr><th>เลขที่ PR / รายการ</th><th>ผู้ขอ / หน่วยงาน</th><th>ยอดรวม</th><th>{view === 'history' ? 'ผลการอนุมัติ' : 'กำหนดใช้'}</th><th>{view === 'history' ? 'วันที่ตัดสินใจ' : 'สถานะ'}</th><th>ดำเนินการ</th></tr></thead><tbody>{rows.map(item => {
       const completed = isHistoryItem(item)
       const decision = completed ? item.decision : 'pending'
-      return <tr key={`${item.pr_id}:${decision}`}><td><strong>{item.pr_no}</strong><small>{item.job_name}</small></td><td><strong>{item.requester_name}</strong><small>{item.requester_department || '—'}</small></td><td className="whitespace-nowrap">{Number(item.total_amount).toLocaleString('en-US', { minimumFractionDigits: 2 })} THB</td>
-        <td>{view === 'history' && completed ? <><Status tone={item.decision}>{item.decision === 'approved' ? 'อนุมัติ' : 'ปฏิเสธ'}</Status><small>{item.comment || (item.decision === 'approved' ? 'ผ่านการอนุมัติ' : '')}</small></> : new Date(item.require_date || item.created_at).toLocaleDateString('th-TH', { day: '2-digit', month: 'short', year: 'numeric' })}</td>
-        <td>{view === 'history' && completed ? <>{new Date(item.approved_at).toLocaleDateString('th-TH', { day: '2-digit', month: 'short', year: 'numeric' })}<small>{new Date(item.approved_at).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' })}</small></> : <Status tone={decision}>{completed ? (decision === 'approved' ? 'อนุมัติ' : 'ปฏิเสธ') : 'รอการอนุมัติจากคุณ'}</Status>}</td>
-        <td><button type="button" onClick={() => completed ? onOpenDetail(item) : onOpenApproval(item)}>◉ {completed ? 'ดูรายละเอียด' : 'พิจารณา'}</button></td></tr>
+      return <tr key={`${item.pr_id}:${decision}`}><td><div className="approval-cell"><strong>{item.pr_no}</strong><small title={item.job_name || undefined}>{item.job_name}</small></div></td><td><div className="approval-cell"><strong>{item.requester_name}</strong><small>{item.requester_department || '—'}</small></div></td><td className="whitespace-nowrap"><div className="approval-cell">{Number(item.total_amount).toLocaleString('en-US', { minimumFractionDigits: 2 })} THB</div></td>
+        <td>{view === 'history' && completed ? <div className="approval-cell"><Status tone={item.decision}>{item.decision === 'approved' ? 'อนุมัติ' : 'ปฏิเสธ'}</Status><small>{item.comment || (item.decision === 'approved' ? 'ผ่านการอนุมัติ' : '')}</small></div> : <div className="approval-cell">{new Date(item.require_date || item.created_at).toLocaleDateString('th-TH', { day: '2-digit', month: 'short', year: 'numeric' })}</div>}</td>
+        <td>{view === 'history' && completed ? <div className="approval-cell">{new Date(item.approved_at).toLocaleDateString('th-TH', { day: '2-digit', month: 'short', year: 'numeric' })}<small>{new Date(item.approved_at).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' })}</small></div> : completed ? <Status tone={decision}>{decision === 'approved' ? 'อนุมัติ' : 'ปฏิเสธ'}</Status> : <PendingStatus item={item} />}</td>
+        <td><button type="button" onClick={() => completed ? onOpenDetail(item) : onOpenApproval(item)}><Eye size={18} aria-hidden="true" />{completed ? 'ดูรายละเอียด' : 'พิจารณา'}</button></td></tr>
     })}</tbody></table>{loading ? <p className="list-state" role="status">กำลังโหลดคำขอ…</p> : !rows.length && !error ? <p className="list-state">ไม่มีรายการ</p> : null}
     <div className="table-footer"><span>แสดง {rows.length} จาก {visible.length} รายการ</span><div><button type="button" disabled={currentPage <= 1} onClick={() => setPage(currentPage - 1)}>ก่อนหน้า</button><button type="button" className="current-page">{currentPage}</button><button type="button" disabled={currentPage >= pageCount} onClick={() => setPage(currentPage + 1)}>ถัดไป</button></div></div></div>
   </section>

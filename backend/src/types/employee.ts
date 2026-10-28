@@ -22,4 +22,7 @@ export interface PendingApprovalItem {
   created_at: Date;
   requester_name: string;
   total_amount: number;
+  // Position of this approver in the PR's chain, e.g. 2 of 3.
+  current_level: number;
+  total_levels: number;
 }

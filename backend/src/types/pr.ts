@@ -13,6 +13,7 @@ export interface CreatePrInput {
   job_name?: string;
   purpose?: string;
   asset_type?: string;
+  budget_code?: string;
   vendor_name?: string;
   items: PrItemInput[];
 }
@@ -25,6 +26,7 @@ export interface PrRow {
   job_name: string | null;
   purpose: string | null;
   asset_type: string | null;
+  budget_code: string | null;
   vendor_name: string | null;
   status: PrStatus;
   created_at: Date;
@@ -69,5 +71,7 @@ export interface PrAttachment {
   pr_id: string;
   file_type: string | null;
   file_path: string;
+  // Name of the file when it was uploaded; null for rows from before it was stored.
+  file_name: string | null;
   uploaded_at: Date;
 }
