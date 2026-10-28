@@ -184,6 +184,7 @@ Token มีอายุ 8 ชั่วโมง หากไม่ส่ง hea
 | `POST` | `/api/pr/:id/approve` | อนุมัติขั้นปัจจุบัน | Bearer token + passcode |
 | `POST` | `/api/pr/:id/reject` | ปฏิเสธ PR ในขั้นปัจจุบัน | Bearer token |
 | `GET` | `/api/pr/:id/pdf` | สร้างไฟล์ PDF ใบขอซื้อ (ข้อมูล PR + การ์ดผู้อนุมัติพร้อมลายเซ็น) | Bearer token; requester/approver |
+| `POST` | `/api/pr/pdf-preview` | สร้าง PDF ตัวอย่างของ PR ที่ยังไม่ได้ส่ง (ไม่บันทึกข้อมูล) | Bearer token |
 
 ## รายละเอียด API
 
@@ -679,6 +680,16 @@ curl http://localhost:3000/api/pr/PR0001/pdf \
 ทดลองดูหน้าตาโดยไม่ต้องเปิด server: `npx tsx src/scripts/try-pdf.ts` (ข้อมูลตัวอย่าง), `... approved`, `... rejected`, `... long` หรือ `... PR0001` (ข้อมูลจริงจาก DB) ไฟล์จะถูกเขียนไว้ในโฟลเดอร์ temp ของระบบ
 
 Errors สำคัญ: `401` เมื่อ token ไม่ถูกต้อง, `403` เมื่อไม่ใช่ผู้ขอซื้อหรือผู้อนุมัติของ PR นี้, `404` เมื่อไม่พบ PR และ `500` เมื่อสร้าง PDF ไม่สำเร็จ
+
+### `POST /api/pr/pdf-preview`
+
+สร้าง PDF ตัวอย่างของใบขอซื้อที่ยังไม่ได้กดส่ง ใช้ในหน้า Review ของ frontend (ปุ่ม View PDF) ไม่มีการบันทึกข้อมูลใดๆ ลงฐานข้อมูล
+
+Body เหมือน `POST /api/pr` แต่ไม่ต้องมี `reservation_id` และตรวจข้อมูลด้วยเงื่อนไขชุดเดียวกัน เลขที่ PR ในเอกสารจะแสดงเป็น `ฉบับร่าง` ส่วนการ์ดผู้อนุมัติจะแสดง approval chain ที่ PR ยอดนี้จะได้รับ โดยทุกขั้นยังเป็น "รอการอนุมัติ"
+
+Response `200`: `Content-Type: application/pdf` (`inline; filename="PR-Draft.pdf"`)
+
+Errors สำคัญ: `400` เมื่อ body ไม่ถูกต้อง (ข้อความเดียวกับ `POST /api/pr`), `401` เมื่อ token ไม่ถูกต้อง และ `500` เมื่อสร้าง PDF ไม่สำเร็จ
 
 ## Approval chain
 

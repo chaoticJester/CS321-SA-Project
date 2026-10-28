@@ -6,7 +6,7 @@ import {
   rejectPrController,
   getPrStatusController,
 } from "../controllers/pr-approval.controller";
-import { getPrPdfController } from "../controllers/pdf.controller";
+import { getPrPdfController, previewPrPdfController } from "../controllers/pdf.controller";
 
 const router = Router();
 
@@ -21,6 +21,9 @@ router.post("/:id/reject", authMiddleware, rejectPrController);
 
 // GET /api/pr/:id/pdf  (?download=1 to save as a file)
 router.get("/:id/pdf", authMiddleware, getPrPdfController);
+
+// POST /api/pr/pdf-preview  (PR not submitted yet, nothing is saved)
+router.post("/pdf-preview", authMiddleware, previewPrPdfController);
 
 
 

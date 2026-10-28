@@ -65,6 +65,78 @@ export async function getPrById(
   }
 }
 
+// Shared by POST /api/pr and POST /api/pr/pdf-preview.
+// Returns the error message when the body is invalid.
+export function parsePrInput(data: Record<string, unknown>, requesterId: string): CreatePrInput | string {
+  const date = typeof data.require_date === "string"
+    ? new Date(data.require_date)
+    : null;
+
+  if (!date || Number.isNaN(date.getTime())) {
+    return "Invalid require_date";
+  }
+
+  if (
+    !Array.isArray(data.items) ||
+    data.items.length === 0 ||
+    !data.items.every((item: unknown) => {
+      if (typeof item !== "object" || item === null || Array.isArray(item)) {
+        return false;
+      }
+
+      const row = item as Record<string, unknown>;
+      const price = row.unit_price;
+
+      return (
+        typeof row.description === "string" &&
+        row.description.trim().length > 0 &&
+        row.description.length <= 255 &&
+        Number.isInteger(row.qty) &&
+        (row.qty as number) > 0 &&
+        typeof price === "number" &&
+        Number.isFinite(price) &&
+        price >= 0 &&
+        price <= 9_999_999_999_999.99 &&
+        Math.abs(price * 100 - Math.round(price * 100)) < 1e-7 &&
+        (row.unit === undefined ||
+          (typeof row.unit === "string" && row.unit.length <= 30))
+      );
+    })
+  ) {
+    return "Invalid PR items";
+  }
+
+  const optionalFields = {
+    job_name: 150,
+    purpose: 255,
+    asset_type: 100,
+    vendor_name: 150,
+  } as const;
+
+  for (const [key, maxLength] of Object.entries(optionalFields)) {
+    const value = data[key];
+    if (
+      value !== undefined &&
+      (typeof value !== "string" || value.length > maxLength)
+    ) {
+      return `Invalid ${key}`;
+    }
+  }
+
+  const input: CreatePrInput = {
+    requester_id: requesterId,
+    // MySQL DATETIME ไม่มีข้อมูล timezone; บันทึกเป็นเวลา UTC
+    require_date: date.toISOString().slice(0, 19).replace("T", " "),
+    job_name: data.job_name as string | undefined,
+    purpose: data.purpose as string | undefined,
+    asset_type: data.asset_type as string | undefined,
+    vendor_name: data.vendor_name as string | undefined,
+    items: data.items as CreatePrInput["items"],
+  };
+
+  return input;
+}
+
 export async function createPrController(
   req: AuthedRequest,
   res: Response,
@@ -95,74 +167,11 @@ export async function createPrController(
     return;
   }
   
-  const date = typeof data.require_date === "string"
-    ? new Date(data.require_date)
-    : null;
-
-  if (!date || Number.isNaN(date.getTime())) {
-    res.status(400).json({ message: "Invalid require_date" });
+  const input = parsePrInput(data, req.user.sub);
+  if (typeof input === "string") {
+    res.status(400).json({ message: input });
     return;
   }
-
-  if (
-    !Array.isArray(data.items) ||
-    data.items.length === 0 ||
-    !data.items.every((item: unknown) => {
-      if (typeof item !== "object" || item === null || Array.isArray(item)) {
-        return false;
-      }
-
-      const row = item as Record<string, unknown>;
-      const price = row.unit_price;
-
-      return (
-        typeof row.description === "string" &&
-        row.description.trim().length > 0 &&
-        row.description.length <= 255 &&
-        Number.isInteger(row.qty) &&
-        (row.qty as number) > 0 &&
-        typeof price === "number" &&
-        Number.isFinite(price) &&
-        price >= 0 &&
-        price <= 9_999_999_999_999.99 &&
-        Math.abs(price * 100 - Math.round(price * 100)) < 1e-7 &&
-        (row.unit === undefined ||
-          (typeof row.unit === "string" && row.unit.length <= 30))
-      );
-    })
-  ) {
-    res.status(400).json({ message: "Invalid PR items" });
-    return;
-  }
-
-  const optionalFields = {
-    job_name: 150,
-    purpose: 255,
-    asset_type: 100,
-    vendor_name: 150,
-  } as const;
-
-  for (const [key, maxLength] of Object.entries(optionalFields)) {
-    const value = data[key];
-    if (
-      value !== undefined &&
-      (typeof value !== "string" || value.length > maxLength)
-    ) {
-      res.status(400).json({ message: `Invalid ${key}` });
-      return;
-    }
-  }
-
-  const input: CreatePrInput = {
-    requester_id: req.user.sub,
-    // MySQL DATETIME ไม่มีข้อมูล timezone; บันทึกเป็นเวลา UTC
-    require_date: date.toISOString().slice(0, 19).replace("T", " "),
-    job_name: data.job_name as string | undefined,
-    purpose: data.purpose as string | undefined,
-    asset_type: data.asset_type as string | undefined,
-    vendor_name: data.vendor_name as string | undefined,
-    items: data.items as CreatePrInput["items"],
-  };
 
   try {
     const prId = await createPr(input, reservationId);

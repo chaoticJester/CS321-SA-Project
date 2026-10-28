@@ -4,9 +4,10 @@ import PDFDocument from "pdfkit";
 import { findPrById } from "../models/pr.model";
 import { findEmployeeById } from "../models/employee.model";
 import { findApprovalStepsWithSignature } from "../models/prApprovalLog.model";
+import { previewApprovalSteps } from "./approval.service";
 import type { ApprovalStepWithSignature } from "../types/approval";
 import type { PrPdfData } from "../types/pdf";
-import type { PrStatus, PrWithItems } from "../types/pr";
+import type { CreatePrInput, PrStatus, PrWithItems } from "../types/pr";
 import { englishBahtText, thaiBahtText } from "../utils/amountInWords";
 import {
   FONT,
@@ -519,11 +520,45 @@ export function renderPrPdf(data: PrPdfData): Promise<Buffer> {
 // Load everything else the PDF needs for an already-loaded PR.
 // (Callers usually have the PR already, e.g. to check it exists first.)
 export async function buildPrPdfData(pr: PrWithItems): Promise<PrPdfData> {
-  const [employee, approvals] = await Promise.all([
-    findEmployeeById(pr.requester_id),
-    // Same rows and order as GET /api/pr/:id/status, so PDF and website match.
-    findApprovalStepsWithSignature(pr.pr_id),
-  ]);
+  // Same rows and order as GET /api/pr/:id/status, so PDF and website match.
+  return buildPdfData(pr, await findApprovalStepsWithSignature(pr.pr_id));
+}
+
+// A PR that has not been submitted yet (POST /api/pr/pdf-preview).
+// Nothing is saved; the approval cards show the chain this total would get.
+export async function buildDraftPdfData(input: CreatePrInput): Promise<PrPdfData> {
+  const items = input.items.map((item, i) => ({
+    item_id: `ITEM${i + 1}`,
+    pr_id: "DRAFT",
+    description: item.description,
+    qty: item.qty,
+    unit: item.unit ?? null,
+    unit_price: item.unit_price.toFixed(2),
+  }));
+  const total = input.items.reduce((sum, item) => sum + item.qty * item.unit_price, 0);
+
+  const pr: PrWithItems = {
+    pr_id: "DRAFT",
+    pr_no: "ฉบับร่าง",
+    requester_id: input.requester_id,
+    // parsePrInput stores require_date as a UTC "YYYY-MM-DD HH:MM:SS" string.
+    require_date: new Date(`${input.require_date.replace(" ", "T")}Z`),
+    job_name: input.job_name ?? null,
+    purpose: input.purpose ?? null,
+    asset_type: input.asset_type ?? null,
+    vendor_name: input.vendor_name ?? null,
+    status: "pending",
+    created_at: new Date(),
+    items,
+    attachments: [],
+    total_amount: total,
+  };
+
+  return buildPdfData(pr, await previewApprovalSteps(total));
+}
+
+async function buildPdfData(pr: PrWithItems, approvals: ApprovalStepWithSignature[]): Promise<PrPdfData> {
+  const employee = await findEmployeeById(pr.requester_id);
 
   return {
     company_name: process.env.COMPANY_NAME || "บริษัทตัวอย่าง จำกัด",

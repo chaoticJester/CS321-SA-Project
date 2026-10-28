@@ -1,6 +1,6 @@
 import { RowDataPacket } from 'mysql2';
 import pool from '../config/db';
-import { ApprovalLevel, ApprovalLogRow, ApproveResult, PrApprovalStatus } from '../types/approval';
+import { ApprovalLevel, ApprovalLogRow, ApprovalStepWithSignature, ApproveResult, PrApprovalStatus } from '../types/approval';
 import crypto from 'crypto';
 import {
     insertApprovalLogs,
@@ -67,6 +67,49 @@ async function getApproversForChain(chain: ApprovalLevel[], db: Queryable = pool
     }
 
     return approversByLevel;
+}
+
+interface PreviewApproverRow extends RowDataPacket {
+    employee_id: string;
+    full_name: string;
+    position: string | null;
+    department: string | null;
+    approval_level_id: string;
+}
+
+// The chain a new PR with this total would get, all still pending.
+// Used by the draft PDF preview; nothing is written to approval_log.
+export async function previewApprovalSteps(totalAmount: number, db: Queryable = pool): Promise<ApprovalStepWithSignature[]> {
+    const chain = await getApprovalChain(totalAmount, db);
+    if (chain.length === 0) {
+        return [];
+    }
+
+    const [rows] = await db.query<PreviewApproverRow[]>(
+        'SELECT employee_id, full_name, position, department, approval_level_id FROM employee WHERE approval_level_id IN (?)',
+        [chain.map(level => level.level_id)]
+    );
+    const approversByLevel = new Map(rows.map(row => [row.approval_level_id, row]));
+
+    return chain.flatMap(level => {
+        const approver = approversByLevel.get(level.level_id);
+        if (!approver) {
+            return [];
+        }
+        return [{
+            sequence_order: level.sequence_order,
+            level_name: level.level_name,
+            approver_id: approver.employee_id,
+            approver_name: approver.full_name,
+            position: approver.position,
+            department: approver.department,
+            status: 'pending' as const,
+            comment: null,
+            approved_at: null,
+            signature_applied: false,
+            signature_image: null,
+        }];
+    });
 }
 
 function generateLogId(): string {
