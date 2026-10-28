@@ -3,7 +3,7 @@ import type { FormEvent } from 'react'
 import { activeItems, basicError, BUDGET, grandTotal, itemError, newRequisition, persistRequisition, readDraft } from '../../../model'
 import type { Requisition } from '../../../model'
 import { Icon } from '../../../components/Icon'
-import { createPr } from '../../../api'
+import { createPr, reservePrNumber } from '../../../api'
 import type { Employee } from '../../../api'
 import { Attachments } from '../components/Attachments'
 import { BasicInfo } from '../components/BasicInfo'
@@ -31,6 +31,13 @@ export function PurchaseRequisitionPage({ employee, onClose, onSignOut, onSubmit
     readDraft().then(draft => { if (mounted && draft) { setValue(syncItemBudgetCodes(draft)); setNotice('Saved draft restored / โหลดฉบับร่างแล้ว') } }).catch(() => { if (mounted) setNotice('Browser storage is unavailable. You can complete the form, but draft saving may fail.') }).finally(() => { if (mounted) setReady(true) })
     return () => { mounted = false }
   }, [])
+  // Reserve the PR number once so the form can show it; a restored draft keeps its reservation.
+  useEffect(() => {
+    if (!ready || value.reservationId) return
+    let mounted = true
+    reservePrNumber().then(({ reservation_id, pr_no }) => { if (mounted) setValue(current => current.reservationId ? current : { ...current, reservationId: reservation_id, reference: pr_no }) }).catch(() => {})
+    return () => { mounted = false }
+  }, [ready, value.reservationId])
   useEffect(() => {
     if (!dirty) return
     const handler = (e: BeforeUnloadEvent) => { e.preventDefault(); e.returnValue = '' }

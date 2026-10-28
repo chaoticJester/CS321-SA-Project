@@ -5,6 +5,7 @@ import type { Requisition } from '../../../model'
 import { RequesterHeader } from '../components/RequesterHeader'
 import { requesterAsset } from '../utils'
 import { PdfPreview } from '../../../components/PdfPreview'
+import { PdfThumbnail } from '../../../components/PdfThumbnail'
 
 type Props = {
   onCreate: () => void
@@ -49,7 +50,7 @@ export function RequesterDashboard({ onCreate, onMyRequests, onSignOut, onNotifi
         <header><h1 id="requests-title">Your Purchase Requisition</h1></header>
         <div className="home-request-grid">
           {visible.map(request => <article className="home-request-card" key={request.backendId || request.reference}>
-            <div className="request-thumbnail" aria-hidden="true" />
+            <div className="request-thumbnail" aria-hidden="true">{request.backendId ? <PdfThumbnail prId={request.backendId} /> : null}</div>
             <h2>{request.reference}</h2>
             <p>{request.basic.job}</p>
             <button type="button" disabled={Boolean(opening)} onClick={() => void openPreview(request)}><Eye size={18} />{opening === request.backendId ? 'กำลังโหลด…' : 'ดูตัวอย่าง PDF'}</button>

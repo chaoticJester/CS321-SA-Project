@@ -188,6 +188,41 @@ export async function listMyPrs(): Promise<Requisition[]> {
   }))
 }
 
+// The PDF endpoint needs the Authorization header, so it cannot be used as an <iframe src> directly.
+export function getPrPdf(prId: string): Promise<Blob> {
+  return requestPdf(`/pr/${encodeURIComponent(prId)}/pdf`)
+}
+
+// A PR that has not been submitted yet; the server renders it without saving.
+export function getDraftPrPdf(value: Requisition): Promise<Blob> {
+  return requestPdf('/pr/pdf-preview', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(toPrBody(value)) })
+}
+
+async function requestPdf(path: string, init: RequestInit = {}): Promise<Blob> {
+  const session = getSession()
+  const headers = new Headers(init.headers)
+  if (session) headers.set('Authorization', `Bearer ${session.token}`)
+  const response = await fetch(`${API_BASE}${path}`, { ...init, headers })
+  if (!response.ok) {
+    const body = await response.json().catch(() => ({})) as { message?: string }
+    throw new Error(body.message || 'ไม่สามารถโหลดไฟล์ PDF ได้')
+  }
+  return response.blob()
+}
+
+export function savePdf(blob: Blob, reference: string) {
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = `${reference.replace(/[^A-Za-z0-9._-]/g, '_') || 'PR'}.pdf`
+  link.click()
+  setTimeout(() => URL.revokeObjectURL(url), 60_000)
+}
+
+export async function downloadPrPdf(prId: string, reference: string) {
+  savePdf(await getPrPdf(prId), reference)
+}
+
 export function getPrApproval(prId: string) {
   return request<ApprovalStatus>(`/pr/${encodeURIComponent(prId)}/status`)
 }
@@ -197,23 +232,42 @@ export async function getMyNotificationCount(): Promise<number> {
   return Number.isFinite(result.count) ? Math.max(0, result.count) : 0
 }
 
+// Body of POST /api/pr, also accepted by POST /api/pr/pdf-preview.
+function toPrBody(value: Requisition) {
+  return {
+    require_date: value.basic.requiredDate,
+    job_name: value.basic.job,
+    purpose: value.basic.purpose,
+    asset_type: value.basic.budgetType || value.basic.mainGroup,
+    vendor_name: value.purchaser,
+    items: value.items.map(item => ({
+      description: [item.name, item.brand, item.model, item.detail].filter(Boolean).join(' · '),
+      qty: Number(item.quantity),
+      unit: item.unit,
+      unit_price: Number(item.price),
+    })),
+  }
+}
+
+export type PrNumberReservation = { reservation_id: string; pr_no: string }
+
+export function reservePrNumber() {
+  return request<PrNumberReservation>('/pr/number-reservations', { method: 'POST' })
+}
+
 export async function createPr(value: Requisition): Promise<Requisition> {
-  const result = await request<{ pr_id: string }>('/pr', {
+  const send = (reservationId: string) => request<{ pr_id: string }>('/pr', {
     method: 'POST',
-    body: JSON.stringify({
-      require_date: value.basic.requiredDate,
-      job_name: value.basic.job,
-      purpose: value.basic.purpose,
-      asset_type: value.basic.budgetType || value.basic.mainGroup,
-      vendor_name: value.purchaser,
-      items: value.items.map(item => ({
-        description: [item.name, item.brand, item.model, item.detail].filter(Boolean).join(' · '),
-        qty: Number(item.quantity),
-        unit: item.unit,
-        unit_price: Number(item.price),
-      })),
-    }),
+    body: JSON.stringify({ ...toPrBody(value), reservation_id: reservationId }),
   })
+  let result: { pr_id: string }
+  try {
+    result = await send(value.reservationId || (await reservePrNumber()).reservation_id)
+  } catch (error) {
+    // A restored draft may hold a reservation that was already used or belongs to another user.
+    if (!(error instanceof Error && /reservation/i.test(error.message))) throw error
+    result = await send((await reservePrNumber()).reservation_id)
+  }
 
   for (const attachment of value.attachments) {
     const form = new FormData()

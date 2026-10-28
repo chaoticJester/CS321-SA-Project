@@ -12,6 +12,8 @@ export type Requisition = {
   basic: BasicInfo; items: Item[]; attachments: Attachment[]; purchaser: string;
   attachmentInfo: AttachmentInfo;
   remark: string; step: number; createdAt: string; reference?: string;
+  // From POST /api/pr/number-reservations; `reference` holds its pr_no until the PR is created.
+  reservationId?: string;
   backendId?: string; status?: 'pending' | 'approved' | 'rejected'; approval?: import('./api').ApprovalStatus;
   requester?: import('./api').Employee;
 }

@@ -3,7 +3,9 @@ import type { Employee, PendingApproval } from '../../../api'
 import type { Requisition } from '../../../model'
 import { BUDGET, grandTotal, money } from '../../../model'
 import { DesignDialog } from '../../../components/DesignDialog'
-import { PdfToolbar } from '../../../components/PdfPreview'
+import { PdfFrame, PdfToolbar } from '../../../components/PdfPreview'
+import { usePrPdf } from '../../../components/usePrPdf'
+import { getPrPdf, savePdf } from '../../../api'
 import { PrintableRequisition } from '../../requester/components/Review'
 import { Icon } from '../../../components/Icon'
 import { Eye, FileText, Paperclip, PenTool, ShieldCheck, ShoppingCart } from 'lucide-react'
@@ -29,6 +31,7 @@ export function ApprovalDetailPage({ employee, selected, requisition, passcode, 
   const [signing, setSigning] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
   const [zoom, setZoom] = useState(100)
+  const { pdf, error: pdfError } = usePrPdf(readOnly ? undefined : selected?.pr_id, () => getPrPdf(selected!.pr_id))
   async function sign() {
     await onDecision('approve')
   }
@@ -42,7 +45,7 @@ export function ApprovalDetailPage({ employee, selected, requisition, passcode, 
     {!requisition && !error ? <p className="list-state" role="status">กำลังโหลดคำขอ…</p> : null}
     {requisition ? <div className="approver-detail-grid">
       <div>{readOnly ? <><RequestInfo employee={employee} selected={selected} requisition={requisition} /><article className="approval-panel mt-8"><h2 className="flex items-center gap-3"><ShoppingCart size={22} />รายการสั่งซื้อ</h2><div className="p-7 overflow-x-auto"><table className="w-full min-w-[560px] border-collapse text-sm"><thead className="bg-[#859ecb] text-white"><tr><th className="p-2">รายการ</th><th>รายละเอียด</th><th>จำนวน</th><th>ราคาต่อหน่วย</th><th>รวม</th></tr></thead><tbody>{requisition.items.map(item => <tr key={item.id}><td className="border border-[#ddd] p-3">{item.name}</td><td className="border border-[#ddd] p-3">{item.detail || item.model}</td><td className="border border-[#ddd] p-3">{item.quantity} {item.unit}</td><td className="border border-[#ddd] p-3">{money(Number(item.price))}</td><td className="border border-[#ddd] p-3">{money(Number(item.quantity) * Number(item.price))} THB</td></tr>)}</tbody></table></div></article></> :
-      <article className="approval-panel"><h2>เอกสารใบขอสั่งซื้อ (PDF)</h2><PdfToolbar reference={selected?.pr_no || 'PR'} zoom={zoom} onZoom={setZoom} onDownload={() => window.print()} /><div className="approval-pdf-canvas" style={{ minHeight: 655 * zoom / 100 }} /></article>}
+      <article className="approval-panel"><h2>เอกสารใบขอสั่งซื้อ (PDF)</h2><PdfToolbar reference={selected?.pr_no || 'PR'} zoom={zoom} onZoom={setZoom} downloadDisabled={!pdf} onDownload={() => { if (pdf) savePdf(pdf.blob, selected?.pr_no || 'PR') }} /><div className="approval-pdf-canvas"><PdfFrame url={pdf?.url} error={pdfError} zoom={zoom} reference={selected?.pr_no || 'PR'} /></div></article>}
       <AttachmentsPanel requisition={requisition} />
       </div>
       <aside><RequestSummary selected={selected} requisition={requisition} budgetOnly={readOnly} /><ApprovalChain requisition={requisition} />
