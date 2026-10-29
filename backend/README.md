@@ -46,6 +46,12 @@ SOURCE database/add_pr_number_reservations.sql;
 mysql -u root -p pr_approval < database/add_pr_detail_columns.sql
 ```
 
+ในทำนองเดียวกัน ฐานข้อมูลเดิมที่สร้างก่อนมีการส่ง PR ใหม่ (resubmit) ต้องรันไฟล์นี้หนึ่งครั้งเพื่อเพิ่มคอลัมน์ `approval_round`:
+
+```bash
+mysql -u root -p pr_approval < database/add_approval_rounds.sql
+```
+
 หากสร้างฐานข้อมูลไว้ก่อนที่จะเพิ่ม API รายการคำขอ ให้เพิ่ม index นี้หนึ่งครั้ง (ฐานข้อมูลใหม่ที่สร้างจาก `schema.sql` มี index นี้แล้ว):
 
 ```sql
@@ -189,6 +195,7 @@ Token มีอายุ 8 ชั่วโมง หากไม่ส่ง hea
 | `GET` | `/api/pr/:id/status` | อ่านสถานะ PR และทุกขั้นอนุมัติ | Bearer token; requester/approver |
 | `POST` | `/api/pr/:id/approve` | อนุมัติขั้นปัจจุบัน | Bearer token + passcode |
 | `POST` | `/api/pr/:id/reject` | ปฏิเสธ PR ในขั้นปัจจุบัน | Bearer token |
+| `POST` | `/api/pr/:id/resubmit` | ผู้ขอส่ง PR ที่ถูกปฏิเสธกลับเข้าระบบใหม่ (เริ่มรอบอนุมัติใหม่) | Bearer token; requester |
 | `GET` | `/api/pr/:id/pdf` | สร้างไฟล์ PDF ใบขอซื้อ (ข้อมูล PR + การ์ดผู้อนุมัติพร้อมลายเซ็น) | Bearer token; requester/approver |
 | `POST` | `/api/pr/pdf-preview` | สร้าง PDF ตัวอย่างของ PR ที่ยังไม่ได้ส่ง (ไม่บันทึกข้อมูล) | Bearer token |
 
@@ -566,6 +573,7 @@ Response `200`:
   "pr_id": "PR0001",
   "pr_no": "IT-001-PR",
   "pr_status": "pending",
+  "approval_round": 1,
   "total": 44000,
   "chain": [
     {
@@ -664,6 +672,33 @@ Errors สำคัญ:
 
 > ปัจจุบัน reject ไม่ได้ตรวจ passcode ซ้ำ ต่างจาก approve
 
+### `POST /api/pr/:id/resubmit`
+
+ผู้ขอแก้ PR ที่ถูกปฏิเสธแล้วส่งกลับเข้าระบบ ใช้ body แบบเดียวกับ `POST /api/pr` (validation เดียวกัน) แต่ไม่ต้องมี `reservation_id` เพราะใช้เลข PR เดิม
+
+ทำทั้งหมดใน transaction เดียว:
+
+1. แทนที่รายละเอียด PR และรายการสินค้าทั้งหมดด้วยข้อมูลใหม่ (ไฟล์แนบเดิมยังอยู่ แนบเพิ่มได้ด้วย `POST /api/pr/:id/attachments`)
+2. เปลี่ยนสถานะ PR กลับเป็น `pending` และเพิ่ม `approval_round` ขึ้น 1
+3. สร้างสายอนุมัติใหม่ตามยอดรวมใหม่ เริ่มที่ Senior Chief อีกครั้ง
+
+log ของรอบก่อนไม่ถูกลบ: `GET /api/pr/:id/status`, PDF และกล่องรออนุมัติจะแสดงเฉพาะรอบปัจจุบัน ส่วน `GET /api/employees/:id/approval-history` ยังเห็นการตัดสินใจของรอบเก่า (เช่น เหตุผลที่เคยปฏิเสธ)
+
+Response `200`:
+
+```json
+{
+  "message": "Resubmitted successfully",
+  "pr_id": "PR3ce7d4ba7534db2e",
+  "pr_no": "IT-002-PR",
+  "approval_round": 2,
+  "total": 21000,
+  "levels": ["Senior Chief", "Manager", "Deputy General Manager"]
+}
+```
+
+Errors สำคัญ: `400` เมื่อ body ไม่ถูกต้อง, `401` เมื่อ token ไม่ถูกต้อง, `403` เมื่อไม่ใช่ผู้ขอของ PR นี้, `404` เมื่อไม่พบ PR, `409` เมื่อ PR ไม่ได้อยู่ในสถานะ `rejected` และ `500` เมื่อเกิดข้อผิดพลาดภายใน
+
 ### `GET /api/pr/:id/pdf`
 
 สร้างใบขอซื้อเป็นไฟล์ PDF ตามแบบของทีม (ตัวอย่างอยู่ที่ไฟล์ออกแบบ `SA_PR_Document`) สร้างใหม่ทุกครั้งจากข้อมูลปัจจุบัน ไม่ได้เก็บไฟล์ไว้
@@ -720,6 +755,8 @@ Errors สำคัญ: `400` เมื่อ body ไม่ถูกต้อ�
 | 6 | Vice President | ไม่จำกัด |
 
 ระบบต้องมีพนักงาน approver อย่างน้อยหนึ่งคนในแต่ละระดับที่ถูกเลือก มิฉะนั้นการสร้าง PR จะล้มเหลวและ transaction จะถูก rollback
+
+เมื่อ PR ถูกปฏิเสธแล้วผู้ขอส่งใหม่ (`POST /api/pr/:id/resubmit`) ระบบจะคำนวณสายอนุมัติใหม่จากยอดรวมใหม่เป็นรอบถัดไป (`approval_round`) ทุก query ที่เกี่ยวกับสายอนุมัติ "ปัจจุบัน" กรองด้วย `approval_log.approval_round = pr.approval_round`
 
 ## คำสั่งที่มีในโปรเจกต์
 

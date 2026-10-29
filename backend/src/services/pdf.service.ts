@@ -555,6 +555,7 @@ export async function buildDraftPdfData(input: CreatePrInput): Promise<PrPdfData
     purchaser_section: input.purchaser_section ?? null,
     vendor_name: input.vendor_name ?? null,
     status: "pending",
+    approval_round: 1,
     created_at: new Date(),
     items,
     attachments: [],

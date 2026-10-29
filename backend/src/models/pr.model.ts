@@ -93,7 +93,17 @@ export async function insertPrAndItems(
         ],
     );
 
-    for (const item of input.items) {
+    await insertPrItems(connection, prId, input.items);
+
+    return prId;
+}
+
+async function insertPrItems(
+    connection: PoolConnection,
+    prId: string,
+    items: CreatePrInput["items"],
+): Promise<void> {
+    for (const item of items) {
         // item_id ยาว 18 ตัวอักษร อยู่ในขนาด VARCHAR(20)
         const itemId = `IT${randomBytes(8).toString("hex")}`;
 
@@ -111,8 +121,48 @@ export async function insertPrAndItems(
             ],
         );
     }
+}
 
-    return prId;
+// Resubmit of a rejected PR: replace its details and items, set it back to
+// pending and start the next approval round. Returns the new round number.
+// The caller must hold the PR row lock (SELECT ... FOR UPDATE) in this transaction.
+export async function updatePrForResubmit(
+    connection: PoolConnection,
+    prId: string,
+    input: CreatePrInput,
+): Promise<number> {
+    await connection.execute<ResultSetHeader>(
+        `UPDATE pr SET
+      require_date = ?, job_name = ?, purpose = ?, asset_type = ?,
+      main_group = ?, budget_type = ?, budget_code = ?, budget_description = ?,
+      line_name = ?, remark = ?, purchaser_section = ?, vendor_name = ?,
+      status = 'pending', approval_round = approval_round + 1
+    WHERE pr_id = ?`,
+        [
+            input.require_date,
+            input.job_name ?? null,
+            input.purpose ?? null,
+            input.asset_type ?? null,
+            input.main_group ?? null,
+            input.budget_type ?? null,
+            input.budget_code ?? null,
+            input.budget_description ?? null,
+            input.line_name ?? null,
+            input.remark ?? null,
+            input.purchaser_section ?? null,
+            input.vendor_name ?? null,
+            prId,
+        ],
+    );
+
+    await connection.execute<ResultSetHeader>("DELETE FROM pr_item WHERE pr_id = ?", [prId]);
+    await insertPrItems(connection, prId, input.items);
+
+    const [rows] = await connection.query<RowDataPacket[]>(
+        "SELECT approval_round FROM pr WHERE pr_id = ?",
+        [prId],
+    );
+    return Number(rows[0]?.approval_round);
 }
 
 export async function findPrById(
@@ -124,7 +174,7 @@ export async function findPrById(
       DATE_FORMAT(require_date, '%Y-%m-%dT%H:%i:%sZ') AS require_date,
       job_name, purpose, asset_type, main_group, budget_type, budget_code,
       budget_description, line_name, remark, purchaser_section,
-      vendor_name, status, created_at
+      vendor_name, status, approval_round, created_at
     FROM pr
     WHERE pr_id = ?`,
     [prId],

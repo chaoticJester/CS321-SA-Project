@@ -28,19 +28,20 @@ export async function findPendingApprovalsForEmployee(
             requester.full_name AS requester_name,
             requester.department AS requester_department,
             COALESCE(SUM(item.qty * item.unit_price), 0) AS total_amount,
-            (SELECT COUNT(*) FROM approval_log done WHERE done.pr_id = pr.pr_id AND done.job_action = 'approved') + 1 AS current_level,
-            (SELECT COUNT(*) FROM approval_log steps WHERE steps.pr_id = pr.pr_id) AS total_levels
+            (SELECT COUNT(*) FROM approval_log done WHERE done.pr_id = pr.pr_id AND done.approval_round = pr.approval_round AND done.job_action = 'approved') + 1 AS current_level,
+            (SELECT COUNT(*) FROM approval_log steps WHERE steps.pr_id = pr.pr_id AND steps.approval_round = pr.approval_round) AS total_levels
      FROM approval_log al
      JOIN pr ON pr.pr_id = al.pr_id
      JOIN employee requester ON requester.employee_id = pr.requester_id
      LEFT JOIN pr_item item ON item.pr_id = pr.pr_id
      WHERE al.approver_id = ?
        AND al.job_action = 'pending'
+       AND al.approval_round = pr.approval_round
        AND al.level_id = (
          SELECT al2.level_id
          FROM approval_log al2
          JOIN approval_level lvl2 ON al2.level_id = lvl2.level_id
-         WHERE al2.pr_id = al.pr_id AND al2.job_action = 'pending'
+         WHERE al2.pr_id = al.pr_id AND al2.approval_round = al.approval_round AND al2.job_action = 'pending'
          ORDER BY lvl2.sequence_order ASC
          LIMIT 1
        )

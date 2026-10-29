@@ -41,6 +41,8 @@ export interface PrRow {
   purchaser_section: string | null;
   vendor_name: string | null;
   status: PrStatus;
+  // 1 for the first submission, +1 every time a rejected PR is resubmitted.
+  approval_round: number;
   created_at: Date;
 }
 

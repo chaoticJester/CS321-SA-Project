@@ -1,6 +1,8 @@
 import { RowDataPacket } from 'mysql2';
 import pool from '../config/db';
-import { ApprovalLevel, ApprovalLogRow, ApprovalStepWithSignature, ApproveResult, PrApprovalStatus } from '../types/approval';
+import { ApprovalLevel, ApprovalLogRow, ApprovalStepWithSignature, ApproveResult, PrApprovalStatus, ResubmitResult } from '../types/approval';
+import type { CreatePrInput } from '../types/pr';
+import { calculatePrTotal } from '../utils/calculatePrTotal';
 import crypto from 'crypto';
 import {
     insertApprovalLogs,
@@ -13,7 +15,7 @@ import {
     updatePrStatus,
     findApprovalStatusByPrId,
 } from '../models/prApprovalLog.model';
-import { canEmployeeAccessPr, findPrById } from '../models/pr.model';
+import { canEmployeeAccessPr, findPrById, updatePrForResubmit } from '../models/pr.model';
 import { Queryable } from '../types/db';
 
 interface ApprovalLevelRow extends RowDataPacket, ApprovalLevel {}
@@ -116,10 +118,11 @@ function generateLogId(): string {
     return `LOG${crypto.randomBytes(8).toString('hex').toUpperCase()}`;
 }
 
-export async function createApprovalLog(prId: string, chain: ApprovalLevel[], db: Queryable = pool): Promise<void> {
-    const alreadyExists = await hasApprovalLogs(prId, db);
+// approvalRound is 1 for a new PR and pr.approval_round for a resubmitted one.
+export async function createApprovalLog(prId: string, chain: ApprovalLevel[], db: Queryable = pool, approvalRound = 1): Promise<void> {
+    const alreadyExists = await hasApprovalLogs(prId, approvalRound, db);
     if (alreadyExists) {
-        throw new Error(`Approval logs already exist for PR ID ${prId}`);
+        throw new Error(`Approval logs already exist for PR ID ${prId} round ${approvalRound}`);
     }
     
     const approversByLevel = await getApproversForChain(chain, db);
@@ -132,6 +135,7 @@ export async function createApprovalLog(prId: string, chain: ApprovalLevel[], db
         return {
             log_id: generateLogId(),
             pr_id: prId,
+            approval_round: approvalRound,
             approver_id: approverId,
             level_id: level.level_id,
         };
@@ -252,7 +256,53 @@ export async function getPrApprovalStatus(prId: string, employeeId: string): Pro
         pr_id: pr.pr_id,
         pr_no: pr.pr_no,
         pr_status: pr.status,
+        approval_round: pr.approval_round,
         total: pr.total_amount,
         chain,
     };
+}
+
+// Requester edits a rejected PR and sends it again. In one transaction:
+// update the PR + items, set it back to pending, and start the next approval
+// round with a new chain for the new total (starting at Senior Chief again).
+// Logs of earlier rounds are kept as history.
+export async function resubmitPr(prId: string, requesterId: string, input: CreatePrInput): Promise<ResubmitResult> {
+    const total = calculatePrTotal(input.items);
+    const connection = await pool.getConnection();
+
+    try {
+        await connection.beginTransaction();
+
+        const pr = await lockPrForApproval(prId, connection);
+        if (!pr) {
+            throw new ApprovalError(404, 'PR not found');
+        }
+        if (pr.requester_id !== requesterId) {
+            throw new ApprovalError(403, 'Only the requester can resubmit this PR');
+        }
+        if (pr.status !== 'rejected') {
+            throw new ApprovalError(409, `Only a rejected PR can be resubmitted (this PR is ${pr.status})`);
+        }
+
+        const approvalRound = await updatePrForResubmit(connection, prId, input);
+        const chain = await getApprovalChain(total, connection);
+        await createApprovalLog(prId, chain, connection, approvalRound);
+
+        const [rows] = await connection.query<RowDataPacket[]>('SELECT pr_no FROM pr WHERE pr_id = ?', [prId]);
+
+        await connection.commit();
+
+        return {
+            pr_id: prId,
+            pr_no: String(rows[0]?.pr_no),
+            approval_round: approvalRound,
+            total,
+            levels: chain.map(level => level.level_name),
+        };
+    } catch (error) {
+        await connection.rollback();
+        throw error;
+    } finally {
+        connection.release();
+    }
 }

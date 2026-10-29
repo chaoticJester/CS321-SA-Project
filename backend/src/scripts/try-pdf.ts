@@ -93,6 +93,7 @@ function sampleData(itemCount: number, scenario: Scenario = "pending"): PrPdfDat
       purchaser_section: "PURCHASING 1 (HO)",
       vendor_name: "บริษัท ABC จำกัด",
       status: scenario as PrStatus,
+      approval_round: 1,
       created_at: new Date("2026-09-20T09:00:00+07:00"),
       items,
       attachments: [],

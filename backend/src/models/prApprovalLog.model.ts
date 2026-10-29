@@ -12,15 +12,21 @@ interface ApprovalStepWithSignatureDbRow extends RowDataPacket, Omit<ApprovalSte
 }
 interface PrLockRow extends RowDataPacket {
     pr_id: string;
+    requester_id: string;
     status: PrStatus;
+    approval_round: number;
 }
 
 export interface NewApprovalLogInput {
     log_id: string;
     pr_id: string;
+    approval_round: number;
     approver_id: string;
     level_id: string;
 }
+
+// Every query about "the" chain of a PR only looks at its current round
+// (pr.approval_round). Logs of earlier rounds stay as history.
 
 export async function insertApprovalLogs(logs: NewApprovalLogInput[], db: Queryable = pool): Promise<void> {
     if (logs.length === 0) {
@@ -30,12 +36,13 @@ export async function insertApprovalLogs(logs: NewApprovalLogInput[], db: Querya
     const values = logs.map(log => [
         log.log_id,
         log.pr_id,
+        log.approval_round,
         log.approver_id,
         log.level_id,
         'pending',
     ]);
 
-    await db.query('INSERT INTO approval_log (log_id, pr_id, approver_id, level_id, job_action) VALUES ?', [values]);
+    await db.query('INSERT INTO approval_log (log_id, pr_id, approval_round, approver_id, level_id, job_action) VALUES ?', [values]);
 }
 
 export async function findNextPendingLog(prId: string, db: Queryable = pool): Promise<PendingLogRow | null> {
@@ -43,7 +50,9 @@ export async function findNextPendingLog(prId: string, db: Queryable = pool): Pr
         `SELECT al.*, lvl.level_name
          FROM approval_log al
          JOIN approval_level lvl ON al.level_id = lvl.level_id
+         JOIN pr ON pr.pr_id = al.pr_id
          WHERE al.pr_id = ? AND al.job_action = 'pending'
+           AND al.approval_round = pr.approval_round
          ORDER BY lvl.sequence_order ASC
          LIMIT 1`,
         [prId]
@@ -51,17 +60,17 @@ export async function findNextPendingLog(prId: string, db: Queryable = pool): Pr
     return rows[0] ?? null;
 }
 
-export async function hasApprovalLogs(prId: string, db: Queryable = pool): Promise<boolean> {
+export async function hasApprovalLogs(prId: string, approvalRound: number, db: Queryable = pool): Promise<boolean> {
   const [rows] = await db.query<RowDataPacket[]>(
-    `SELECT 1 FROM approval_log WHERE pr_id = ? LIMIT 1`,
-    [prId]
+    `SELECT 1 FROM approval_log WHERE pr_id = ? AND approval_round = ? LIMIT 1`,
+    [prId, approvalRound]
   );
   return rows.length > 0;
 }
 
 export async function lockPrForApproval(prId: string, db: Queryable): Promise<PrLockRow | null> {
     const [rows] = await db.query<PrLockRow[]>(
-        'SELECT pr_id, status FROM pr WHERE pr_id = ? FOR UPDATE',
+        'SELECT pr_id, requester_id, status, approval_round FROM pr WHERE pr_id = ? FOR UPDATE',
         [prId]
     );
     return rows[0] ?? null;
@@ -93,8 +102,11 @@ export async function markLogRejected(logId: string, comment: string, db: Querya
 
 export async function cancelRemainingLogs(prId: string, db: Queryable = pool): Promise<void> {
     await db.query(
-        `UPDATE approval_log SET job_action = 'cancelled'
-         WHERE pr_id = ? AND job_action = 'pending'`,
+        `UPDATE approval_log al
+         JOIN pr ON pr.pr_id = al.pr_id
+         SET al.job_action = 'cancelled'
+         WHERE al.pr_id = ? AND al.job_action = 'pending'
+           AND al.approval_round = pr.approval_round`,
         [prId]
     );
 }
@@ -118,7 +130,8 @@ export async function findApprovalStatusByPrId(prId: string, db: Queryable = poo
          FROM approval_log al
          JOIN approval_level lvl ON lvl.level_id = al.level_id
          JOIN employee e ON e.employee_id = al.approver_id
-         WHERE al.pr_id = ?
+         JOIN pr ON pr.pr_id = al.pr_id
+         WHERE al.pr_id = ? AND al.approval_round = pr.approval_round
          ORDER BY lvl.sequence_order ASC`,
         [prId]
     );
@@ -145,7 +158,8 @@ export async function findApprovalStepsWithSignature(prId: string, db: Queryable
          FROM approval_log al
          JOIN approval_level lvl ON lvl.level_id = al.level_id
          JOIN employee e ON e.employee_id = al.approver_id
-         WHERE al.pr_id = ?
+         JOIN pr ON pr.pr_id = al.pr_id
+         WHERE al.pr_id = ? AND al.approval_round = pr.approval_round
          ORDER BY lvl.sequence_order ASC`,
         [prId]
     );

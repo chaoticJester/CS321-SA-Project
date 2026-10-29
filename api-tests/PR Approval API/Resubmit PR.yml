@@ -1,0 +1,53 @@
+info:
+  name: Resubmit PR
+  type: http
+  seq: 22
+
+http:
+  method: POST
+  url: "{{baseUrl}}/api/pr/{{prId}}/resubmit"
+  headers:
+    - name: Authorization
+      value: Bearer {{token}}
+  body:
+    type: json
+    data: |-
+      {
+        "require_date": "2026-12-15",
+        "job_name": "Notebook (ส่งใหม่)",
+        "purpose": "ปรับจำนวนตามที่ผู้อนุมัติแนะนำ",
+        "main_group": "8. General Adm",
+        "budget_type": "Investment Budget",
+        "budget_code": "26-23-ADM-072",
+        "budget_description": "Computer Notebook Standard (New Staff)",
+        "line_name": "หน่วยงานเทคโนโลยีสารสนเทศ",
+        "purchaser_section": "PURCHASING 1 (HO)",
+        "items": [
+          { "description": "Notebook HP", "qty": 2, "unit": "set", "unit_price": 22000 }
+        ]
+      }
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: tests
+      code: |-
+        // Needs {{prId}} = a REJECTED PR and {{token}} = its requester (e.g. E0020).
+        test("returns 200", function () {
+          expect(res.getStatus()).to.equal(200);
+        });
+
+        test("starts a new approval round", function () {
+          expect(res.getBody().approval_round).to.be.above(1);
+        });
+
+        test("new chain starts at Senior Chief", function () {
+          expect(res.getBody().levels[0]).to.equal("Senior Chief");
+        });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

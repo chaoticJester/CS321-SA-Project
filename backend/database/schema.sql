@@ -46,6 +46,7 @@ CREATE TABLE pr (
     purchaser_section VARCHAR(100)  NULL,
     vendor_name     VARCHAR(150)    NULL,
     status          VARCHAR(30)     NOT NULL DEFAULT 'pending',  
+    approval_round  INT UNSIGNED    NOT NULL DEFAULT 1,
     created_at      DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (pr_id),
     UNIQUE KEY uq_pr_no (pr_no),
@@ -86,6 +87,7 @@ CREATE TABLE attachment (
 CREATE TABLE approval_log (
     log_id              VARCHAR(20)     NOT NULL,
     pr_id               VARCHAR(20)     NOT NULL,
+    approval_round      INT UNSIGNED    NOT NULL DEFAULT 1,
     approver_id         VARCHAR(20)     NOT NULL,
     level_id            VARCHAR(20)     NOT NULL,
     job_action          VARCHAR(30)     NOT NULL,  
@@ -94,6 +96,7 @@ CREATE TABLE approval_log (
     approved_at         DATETIME        NULL,
     created_at          DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (log_id),
+    INDEX idx_approval_log_pr_round (pr_id, approval_round),
     CONSTRAINT fk_approval_log_pr
         FOREIGN KEY (pr_id) REFERENCES pr(pr_id)
         ON UPDATE CASCADE

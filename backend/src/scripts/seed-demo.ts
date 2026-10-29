@@ -24,6 +24,7 @@ const MIGRATIONS = [
   { table: "attachment", column: "file_name", file: "add_attachment_file_name.sql" },
   { table: "pr", column: "budget_code", file: "add_pr_budget_code.sql" },
   { table: "pr", column: "main_group", file: "add_pr_detail_columns.sql" },
+  { table: "pr", column: "approval_round", file: "add_approval_rounds.sql" },
 ];
 
 // Budget Description the form fills in when a budget code is picked (frontend/src/formOptions.ts).

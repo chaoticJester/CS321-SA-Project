@@ -4,8 +4,10 @@ import {
   approvePr,
   rejectPr,
   getPrApprovalStatus,
+  resubmitPr,
   ApprovalError,
 } from "../services/approval.service";
+import { parsePrInput } from "./pr.controller";
 
 function sendError(res: Response, error: unknown, context: string): void {
   if (error instanceof ApprovalError) {
@@ -64,5 +66,33 @@ export async function getPrStatusController(req: AuthedRequest, res: Response): 
     res.status(200).json(status);
   } catch (error) {
     sendError(res, error, "getPrStatus");
+  }
+}
+
+// POST /api/pr/:id/resubmit   body: same as POST /api/pr, without reservation_id
+// The requester sends a rejected PR again with the corrected details.
+export async function resubmitPrController(req: AuthedRequest, res: Response): Promise<void> {
+  if (!req.user) {
+    res.status(401).json({ message: "Unauthorized" });
+    return;
+  }
+
+  const body: unknown = req.body;
+  if (typeof body !== "object" || body === null || Array.isArray(body)) {
+    res.status(400).json({ message: "Invalid request body" });
+    return;
+  }
+
+  const input = parsePrInput(body as Record<string, unknown>, req.user.sub);
+  if (typeof input === "string") {
+    res.status(400).json({ message: input });
+    return;
+  }
+
+  try {
+    const result = await resubmitPr(req.params.id as string, req.user.sub, input);
+    res.status(200).json({ message: "Resubmitted successfully", ...result });
+  } catch (error) {
+    sendError(res, error, "resubmitPr");
   }
 }

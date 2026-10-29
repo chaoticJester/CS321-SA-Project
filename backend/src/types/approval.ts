@@ -10,6 +10,7 @@ export type ApprovalAction = 'pending' | 'approved' | 'rejected' | 'cancelled';
 export interface ApprovalLogRow {
     log_id: string;
     pr_id: string;
+    approval_round: number;
     approver_id: string;
     level_id: string;
     job_action: ApprovalAction;
@@ -45,6 +46,8 @@ export interface PrApprovalStatus {
     pr_id: string;
     pr_no: string;
     pr_status: string;
+    // 1 for the first submission, +1 every time a rejected PR is resubmitted.
+    approval_round: number;
     total: number;
     chain: ApprovalStatusStep[];
 }
@@ -53,4 +56,13 @@ export interface ApproveResult {
     pr_id: string;
     current_level: string;
     is_final: boolean;
+}
+
+export interface ResubmitResult {
+    pr_id: string;
+    pr_no: string;
+    approval_round: number;
+    total: number;
+    // Level names of the new chain, in order.
+    levels: string[];
 }
