@@ -110,7 +110,13 @@ export function parsePrInput(data: Record<string, unknown>, requesterId: string)
     job_name: 150,
     purpose: 255,
     asset_type: 100,
+    main_group: 100,
+    budget_type: 50,
     budget_code: 50,
+    budget_description: 255,
+    line_name: 150,
+    remark: 500,
+    purchaser_section: 100,
     vendor_name: 150,
   } as const;
 
@@ -131,7 +137,13 @@ export function parsePrInput(data: Record<string, unknown>, requesterId: string)
     job_name: data.job_name as string | undefined,
     purpose: data.purpose as string | undefined,
     asset_type: data.asset_type as string | undefined,
+    main_group: data.main_group as string | undefined,
+    budget_type: data.budget_type as string | undefined,
     budget_code: data.budget_code as string | undefined,
+    budget_description: data.budget_description as string | undefined,
+    line_name: data.line_name as string | undefined,
+    remark: data.remark as string | undefined,
+    purchaser_section: data.purchaser_section as string | undefined,
     vendor_name: data.vendor_name as string | undefined,
     items: data.items as CreatePrInput["items"],
   };

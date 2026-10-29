@@ -6,6 +6,4 @@ const router = Router();
 //POST /api/auth/login
 router.post("/login", login);
 
-//POST /api/auth/verify-passcode -> Peak's task
-
 export default router;

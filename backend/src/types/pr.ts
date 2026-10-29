@@ -13,7 +13,13 @@ export interface CreatePrInput {
   job_name?: string;
   purpose?: string;
   asset_type?: string;
+  main_group?: string;
+  budget_type?: string;
   budget_code?: string;
+  budget_description?: string;
+  line_name?: string;
+  remark?: string;
+  purchaser_section?: string;
   vendor_name?: string;
   items: PrItemInput[];
 }
@@ -26,7 +32,13 @@ export interface PrRow {
   job_name: string | null;
   purpose: string | null;
   asset_type: string | null;
+  main_group: string | null;
+  budget_type: string | null;
   budget_code: string | null;
+  budget_description: string | null;
+  line_name: string | null;
+  remark: string | null;
+  purchaser_section: string | null;
   vendor_name: string | null;
   status: PrStatus;
   created_at: Date;

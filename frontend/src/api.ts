@@ -41,7 +41,13 @@ type ApiPr = {
   job_name: string | null
   purpose: string | null
   asset_type: string | null
+  main_group?: string | null
+  budget_type?: string | null
   budget_code?: string | null
+  budget_description?: string | null
+  line_name?: string | null
+  remark?: string | null
+  purchaser_section?: string | null
   vendor_name: string | null
   status: 'pending' | 'approved' | 'rejected'
   created_at: string
@@ -109,13 +115,14 @@ function toRequisition(pr: ApiPr, approval?: ApprovalStatus): Requisition {
   return {
     basic: {
       job: pr.job_name || '',
-      mainGroup: '',
-      budgetType: pr.asset_type || '',
+      mainGroup: pr.main_group || '',
+      // PRs created before budget_type was stored only have it in asset_type.
+      budgetType: pr.budget_type || pr.asset_type || '',
       requiredDate: pr.require_date.slice(0, 10),
       budgetCode: pr.budget_code || '',
       purpose: pr.purpose || '',
-      line: '',
-      description: '',
+      line: pr.line_name || '',
+      description: pr.budget_description || '',
       currency: 'THB',
     },
     items: (pr.items || []).map(item => ({
@@ -131,8 +138,9 @@ function toRequisition(pr: ApiPr, approval?: ApprovalStatus): Requisition {
     })),
     attachments: [],
     attachmentInfo: { documentType: '', documentNo: '', documentDate: '' },
-    purchaser: pr.vendor_name || '',
-    remark: '',
+    // PRs created before purchaser_section was stored only have it in vendor_name.
+    purchaser: pr.purchaser_section || pr.vendor_name || '',
+    remark: pr.remark || '',
     step: 4,
     createdAt: pr.created_at,
     reference: pr.pr_no,
@@ -243,7 +251,13 @@ function toPrBody(value: Requisition) {
     job_name: value.basic.job,
     purpose: value.basic.purpose,
     asset_type: value.basic.budgetType || value.basic.mainGroup,
+    main_group: value.basic.mainGroup || undefined,
+    budget_type: value.basic.budgetType || undefined,
     budget_code: value.basic.budgetCode,
+    budget_description: value.basic.description || undefined,
+    line_name: value.basic.line || undefined,
+    remark: value.remark || undefined,
+    purchaser_section: value.purchaser || undefined,
     vendor_name: value.purchaser,
     items: value.items.map(item => ({
       description: [item.name, item.brand, item.model, item.detail].filter(Boolean).join(' · '),

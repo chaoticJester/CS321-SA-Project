@@ -71,8 +71,9 @@ export async function insertPrAndItems(
     await connection.execute<ResultSetHeader>(
         `INSERT INTO pr (
       pr_id, pr_no, requester_id, require_date,
-      job_name, purpose, asset_type, budget_code, vendor_name, status
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')`,
+      job_name, purpose, asset_type, main_group, budget_type, budget_code,
+      budget_description, line_name, remark, purchaser_section, vendor_name, status
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')`,
         [
             prId,
             prNo,
@@ -81,7 +82,13 @@ export async function insertPrAndItems(
             input.job_name ?? null,
             input.purpose ?? null,
             input.asset_type ?? null,
+            input.main_group ?? null,
+            input.budget_type ?? null,
             input.budget_code ?? null,
+            input.budget_description ?? null,
+            input.line_name ?? null,
+            input.remark ?? null,
+            input.purchaser_section ?? null,
             input.vendor_name ?? null,
         ],
     );
@@ -115,7 +122,9 @@ export async function findPrById(
     `SELECT
       pr_id, pr_no, requester_id,
       DATE_FORMAT(require_date, '%Y-%m-%dT%H:%i:%sZ') AS require_date,
-      job_name, purpose, asset_type, budget_code, vendor_name, status, created_at
+      job_name, purpose, asset_type, main_group, budget_type, budget_code,
+      budget_description, line_name, remark, purchaser_section,
+      vendor_name, status, created_at
     FROM pr
     WHERE pr_id = ?`,
     [prId],

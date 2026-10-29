@@ -23,7 +23,24 @@ const MIGRATIONS = [
   { table: "pr_number_counter", file: "add_pr_number_reservations.sql" },
   { table: "attachment", column: "file_name", file: "add_attachment_file_name.sql" },
   { table: "pr", column: "budget_code", file: "add_pr_budget_code.sql" },
+  { table: "pr", column: "main_group", file: "add_pr_detail_columns.sql" },
 ];
+
+// Budget Description the form fills in when a budget code is picked (frontend/src/formOptions.ts).
+const BUDGET_DESCRIPTION: Record<string, string> = {
+  "26-99-1000-ACT-2-901-001-00": "52020309 · Quality Month",
+  "26-99-1000-ACT-2-901-002-00": "52020309 · Idea Suggestion",
+  "26-99-1000-ACT-2-901-003-00": "52020309 · QCC Activity (Internal)",
+  "26-99-1000-BOO-2-901-001-00": "52020109 · Book & Newspaper",
+  "26-99-1000-BUS-2-901-001-00": "52020109 · Bus Charge",
+  "26-23-ADM-072": "Computer Notebook Standard (New Staff)",
+  "26-23-ADM-073": "Microsoft Server CAL Device",
+  "26-23-ADM-074": "Microsoft M365 Enterprise",
+  "26-23-ADM-075": "Microsoft Teams Enterprise (MS Teams Only)",
+  "26-23-ADM-076": "Antivirus and Kace",
+};
+const MAIN_GROUP = "8. General Adm";
+const LINE_NAME = "หน่วยงานเทคโนโลยีสารสนเทศ";
 
 // Approver of each level in seed_data.sql.
 const APPROVER = { LV1: "E0018", LV2: "E0017", LV3: "E0015", LV4: "E0010", LV5: "E0005", LV6: "E0002" } as const;
@@ -261,7 +278,12 @@ async function seedPr(pr: DemoPr): Promise<string> {
       job_name: pr.job,
       purpose: pr.purpose,
       asset_type: pr.budgetType,
+      main_group: MAIN_GROUP,
+      budget_type: pr.budgetType,
       budget_code: pr.budgetCode,
+      budget_description: BUDGET_DESCRIPTION[pr.budgetCode],
+      line_name: LINE_NAME,
+      purchaser_section: pr.purchaser,
       vendor_name: pr.purchaser,
       items: pr.items,
     },

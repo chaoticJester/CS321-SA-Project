@@ -223,19 +223,19 @@ function drawRequesterBlock(doc: Doc, data: PrPdfData, y: number): number {
   y = drawBlockTitle(doc, "ข้อมูลผู้ขอซื้อ", y);
   y = drawTwoColumns(doc, ["ชื่อ–นามสกุล", requester.full_name], ["ตำแหน่ง", show(requester.position)], y);
   y = drawTwoColumns(doc, ["แผนก", show(requester.department)], ["สาขา", show(requester.site)], y);
-  y = drawFullRow(doc, "หน่วยงาน", show(requester.line), y);
+  y = drawFullRow(doc, "หน่วยงาน", show(data.pr.line_name), y);
   return y;
 }
 
 function drawRequestBlock(doc: Doc, data: PrPdfData, y: number): number {
-  const { pr, extra } = data;
+  const { pr } = data;
   y = drawBlockTitle(doc, "รายละเอียดคำขอ", y);
   y = drawFullRow(doc, "ชื่องาน", show(pr.job_name), y);
   y = drawFullRow(doc, "วัตถุประสงค์", show(pr.purpose), y);
   y = drawTwoColumns(doc, ["ประเภทสินทรัพย์", show(pr.asset_type)], ["ผู้ขาย", show(pr.vendor_name)], y + 4);
-  y = drawTwoColumns(doc, ["กลุ่มสินค้าหลัก", show(extra.main_group)], ["ชนิดงบประมาณ", show(extra.budget_type)], y);
-  y = drawTwoColumns(doc, ["รหัสงบประมาณ", show(extra.budget_code)], ["สกุลเงิน", CURRENCY], y);
-  y = drawFullRow(doc, "รายละเอียดงบประมาณ", show(extra.budget_description), y);
+  y = drawTwoColumns(doc, ["กลุ่มสินค้าหลัก", show(pr.main_group)], ["ชนิดงบประมาณ", show(pr.budget_type)], y);
+  y = drawTwoColumns(doc, ["รหัสงบประมาณ", show(pr.budget_code)], ["สกุลเงิน", CURRENCY], y);
+  y = drawFullRow(doc, "รายละเอียดงบประมาณ", show(pr.budget_description), y);
   y = drawFullRow(doc, "อัตราแลกเปลี่ยน", `1 ${CURRENCY} = ${EXCHANGE_RATE} THB`, y + 4);
   return y;
 }
@@ -308,8 +308,8 @@ function drawTotalsBlock(doc: Doc, data: PrPdfData, y: number): number {
 
   y = drawFullRow(doc, "จำนวนเงินภาษาไทย", thaiBahtText(total), y);
   y = drawFullRow(doc, "จำนวนเงินภาษาอังกฤษ", englishBahtText(total), y);
-  y = drawFullRow(doc, "หมายเหตุ", show(data.extra.remark), y);
-  y = drawFullRow(doc, "ส่วนงานจัดซื้อ", show(data.extra.purchaser_section), y + 4);
+  y = drawFullRow(doc, "หมายเหตุ", show(data.pr.remark), y);
+  y = drawFullRow(doc, "ส่วนงานจัดซื้อ", show(data.pr.purchaser_section), y + 4);
   return y;
 }
 
@@ -546,7 +546,13 @@ export async function buildDraftPdfData(input: CreatePrInput): Promise<PrPdfData
     job_name: input.job_name ?? null,
     purpose: input.purpose ?? null,
     asset_type: input.asset_type ?? null,
+    main_group: input.main_group ?? null,
+    budget_type: input.budget_type ?? null,
     budget_code: input.budget_code ?? null,
+    budget_description: input.budget_description ?? null,
+    line_name: input.line_name ?? null,
+    remark: input.remark ?? null,
+    purchaser_section: input.purchaser_section ?? null,
     vendor_name: input.vendor_name ?? null,
     status: "pending",
     created_at: new Date(),
@@ -571,17 +577,7 @@ async function buildPdfData(pr: PrWithItems, approvals: ApprovalStepWithSignatur
       full_name: employee?.full_name ?? pr.requester_id,
       position: employee?.position ?? null,
       department: employee?.department ?? null,
-      site: null, // not in the DB yet
-      line: null, // not in the DB yet
-    },
-    // Fields not in the DB yet are null and printed as "-".
-    extra: {
-      main_group: null,
-      budget_type: null,
-      budget_code: pr.budget_code,
-      budget_description: null,
-      remark: null,
-      purchaser_section: null,
+      site: employee?.site ?? null,
     },
   };
 }

@@ -40,6 +40,12 @@ SOURCE database/seed_data.sql;
 SOURCE database/add_pr_number_reservations.sql;
 ```
 
+หากใช้ฐานข้อมูลเดิมที่สร้างก่อนมีคอลัมน์รายละเอียดคำขอ (กลุ่มสินค้าหลัก, ชนิด/รายละเอียดงบประมาณ, หน่วยงาน, หมายเหตุ, ส่วนงานจัดซื้อ และสาขาของพนักงาน) ให้รันไฟล์นี้หนึ่งครั้ง ฐานข้อมูลใหม่ที่สร้างจาก `schema.sql` มีคอลัมน์เหล่านี้แล้ว ไม่ต้องรัน (`npm run seed:demo -- --reset` จะรันให้เองถ้ายังไม่มี):
+
+```bash
+mysql -u root -p pr_approval < database/add_pr_detail_columns.sql
+```
+
 หากสร้างฐานข้อมูลไว้ก่อนที่จะเพิ่ม API รายการคำขอ ให้เพิ่ม index นี้หนึ่งครั้ง (ฐานข้อมูลใหม่ที่สร้างจาก `schema.sql` มี index นี้แล้ว):
 
 ```sql
@@ -373,6 +379,13 @@ Request body:
   "job_name": "Office notebooks",
   "purpose": "Replace old equipment",
   "asset_type": "IT equipment",
+  "main_group": "8. General Adm",
+  "budget_type": "Investment Budget",
+  "budget_code": "26-23-ADM-072",
+  "budget_description": "Computer Notebook Standard (New Staff)",
+  "line_name": "หน่วยงานเทคโนโลยีสารสนเทศ",
+  "remark": "กรุณาจัดส่งพร้อมกัน",
+  "purchaser_section": "PURCHASING 1 (HO)",
   "vendor_name": "ABC Company",
   "items": [
     {
@@ -393,7 +406,7 @@ Validation:
 - `qty` ต้องเป็นจำนวนเต็มมากกว่า 0
 - `unit_price` ต้องเป็นตัวเลขตั้งแต่ 0 ถึง `9,999,999,999,999.99` และมีทศนิยมไม่เกิน 2 ตำแหน่ง
 - `unit` ยาวไม่เกิน 30 ตัวอักษร
-- optional fields จำกัดความยาว: `job_name` 150, `purpose` 255, `asset_type` 100 และ `vendor_name` 150 ตัวอักษร
+- optional fields จำกัดความยาว: `job_name` 150, `purpose` 255, `asset_type` 100, `main_group` 100, `budget_type` 50, `budget_code` 50, `budget_description` 255, `line_name` 150, `remark` 500, `purchaser_section` 100 และ `vendor_name` 150 ตัวอักษร
 
 Response `201`:
 
@@ -675,7 +688,7 @@ curl http://localhost:3000/api/pr/PR0001/pdf \
 
 หมายเหตุสำหรับ frontend: endpoint นี้ต้องส่ง header `Authorization` จึงใช้ `<iframe src>` หรือ `<a href>` ตรงๆ ไม่ได้ ให้ `fetch` แล้วแปลงเป็น `Blob` + `URL.createObjectURL()` ก่อนแสดงหรือดาวน์โหลด
 
-ช่องในแบบที่ฐานข้อมูลยังไม่มี (สาขา, หน่วยงาน, กลุ่มสินค้าหลัก, ชนิด/รหัส/รายละเอียดงบประมาณ, หมายเหตุ, ส่วนงานจัดซื้อ) จะแสดงเป็น `-` ชื่อบริษัทตั้งได้ด้วย `COMPANY_NAME` ใน `.env` (ค่าเริ่มต้น `บริษัทตัวอย่าง จำกัด`)
+ช่องที่ไม่มีข้อมูล (เช่น PR เก่าที่สร้างก่อนมีคอลัมน์รายละเอียดคำขอ) จะแสดงเป็น `-` ชื่อบริษัทตั้งได้ด้วย `COMPANY_NAME` ใน `.env` (ค่าเริ่มต้น `บริษัทตัวอย่าง จำกัด`)
 
 ทดลองดูหน้าตาโดยไม่ต้องเปิด server: `npx tsx src/scripts/try-pdf.ts` (ข้อมูลตัวอย่าง), `... approved`, `... rejected`, `... long` หรือ `... PR0001` (ข้อมูลจริงจาก DB) ไฟล์จะถูกเขียนไว้ในโฟลเดอร์ temp ของระบบ
 

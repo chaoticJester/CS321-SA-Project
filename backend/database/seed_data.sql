@@ -6,14 +6,14 @@ INSERT INTO approval_level (level_id, level_name, sequence_order, limit_amount) 
 ('LV5', 'Senior Director',         5, 200000.00),
 ('LV6', 'Vice President',          6, NULL);       
 
-INSERT INTO employee (employee_id, full_name, position, department, approval_level_id, passcode_hash, signature_image) VALUES
-('E0020', 'Mr. A', 'IT Support',       'IT Department', NULL,  '$2b$10$C7DB1glkd3lu6l7dHcP45ufJ7.MsWvBy21HJSPfK1d5RV8JX3i8iC', NULL),
-('E0018', 'Mr. B', 'Senior Chief',     'IT Department', 'LV1', '$2b$10$C7DB1glkd3lu6l7dHcP45ufJ7.MsWvBy21HJSPfK1d5RV8JX3i8iC', '/signatures/e0018.png'),
-('E0017', 'Mr. C', 'IT Manager',       'IT Department', 'LV2', '$2b$10$C7DB1glkd3lu6l7dHcP45ufJ7.MsWvBy21HJSPfK1d5RV8JX3i8iC', '/signatures/e0017.png'),
-('E0015', 'Mr. D', 'DGM',              'IT Department', 'LV3', '$2b$10$C7DB1glkd3lu6l7dHcP45ufJ7.MsWvBy21HJSPfK1d5RV8JX3i8iC', '/signatures/e0015.png'),
-('E0010', 'Mr. E', 'General Manager',  'IT Department', 'LV4', '$2b$10$C7DB1glkd3lu6l7dHcP45ufJ7.MsWvBy21HJSPfK1d5RV8JX3i8iC', '/signatures/e0010.png'),
-('E0005', 'Mr. F', 'Senior Director',  'IT Department', 'LV5', '$2b$10$C7DB1glkd3lu6l7dHcP45ufJ7.MsWvBy21HJSPfK1d5RV8JX3i8iC', '/signatures/e0005.png'),
-('E0002', 'Mr. G', 'Vice President',   'IT Department', 'LV6', '$2b$10$C7DB1glkd3lu6l7dHcP45ufJ7.MsWvBy21HJSPfK1d5RV8JX3i8iC', '/signatures/e0002.png');
+INSERT INTO employee (employee_id, full_name, position, department, site, approval_level_id, passcode_hash, signature_image) VALUES
+('E0020', 'Mr. A', 'IT Support',       'IT Department', 'สำนักงานใหญ่', NULL,  '$2b$10$C7DB1glkd3lu6l7dHcP45ufJ7.MsWvBy21HJSPfK1d5RV8JX3i8iC', NULL),
+('E0018', 'Mr. B', 'Senior Chief',     'IT Department', 'สำนักงานใหญ่', 'LV1', '$2b$10$C7DB1glkd3lu6l7dHcP45ufJ7.MsWvBy21HJSPfK1d5RV8JX3i8iC', '/signatures/e0018.png'),
+('E0017', 'Mr. C', 'IT Manager',       'IT Department', 'สำนักงานใหญ่', 'LV2', '$2b$10$C7DB1glkd3lu6l7dHcP45ufJ7.MsWvBy21HJSPfK1d5RV8JX3i8iC', '/signatures/e0017.png'),
+('E0015', 'Mr. D', 'DGM',              'IT Department', 'สำนักงานใหญ่', 'LV3', '$2b$10$C7DB1glkd3lu6l7dHcP45ufJ7.MsWvBy21HJSPfK1d5RV8JX3i8iC', '/signatures/e0015.png'),
+('E0010', 'Mr. E', 'General Manager',  'IT Department', 'สำนักงานใหญ่', 'LV4', '$2b$10$C7DB1glkd3lu6l7dHcP45ufJ7.MsWvBy21HJSPfK1d5RV8JX3i8iC', '/signatures/e0010.png'),
+('E0005', 'Mr. F', 'Senior Director',  'IT Department', 'สำนักงานใหญ่', 'LV5', '$2b$10$C7DB1glkd3lu6l7dHcP45ufJ7.MsWvBy21HJSPfK1d5RV8JX3i8iC', '/signatures/e0005.png'),
+('E0002', 'Mr. G', 'Vice President',   'IT Department', 'สำนักงานใหญ่', 'LV6', '$2b$10$C7DB1glkd3lu6l7dHcP45ufJ7.MsWvBy21HJSPfK1d5RV8JX3i8iC', '/signatures/e0002.png');
 
 INSERT INTO pr (pr_id, pr_no, requester_id, require_date, job_name, purpose, asset_type, vendor_name, status, created_at) VALUES
 ('PR0001', 'IT-001-PR', 'E0020', '2026-08-01 00:00:00', 'Notebook',

@@ -84,7 +84,13 @@ function sampleData(itemCount: number, scenario: Scenario = "pending"): PrPdfDat
       purpose:
         "ทดแทนเครื่องเดิมที่ใช้งานมานานกว่าห้าปี เครื่องเดิมทำงานช้าและไม่รองรับซอฟต์แวร์รุ่นใหม่ที่ฝ่ายเทคโนโลยีสารสนเทศต้องใช้ในการพัฒนาระบบภายในองค์กร",
       asset_type: "Office Supply",
+      main_group: "8. General Adm",
+      budget_type: "Investment Budget",
       budget_code: "26-23-ADM-072",
+      budget_description: "Computer Notebook Standard (New Staff)",
+      line_name: "หน่วยงานเทคโนโลยีสารสนเทศ",
+      remark: "กรุณาจัดส่งอุปกรณ์พร้อมกัน & ติดตั้งให้ภายใน 7 วัน",
+      purchaser_section: "PURCHASING 1 (HO)",
       vendor_name: "บริษัท ABC จำกัด",
       status: scenario as PrStatus,
       created_at: new Date("2026-09-20T09:00:00+07:00"),
@@ -97,16 +103,7 @@ function sampleData(itemCount: number, scenario: Scenario = "pending"): PrPdfDat
       full_name: "Amika Rattanakul",
       position: "IT Support",
       department: "Technology Development",
-      site: null,
-      line: null,
-    },
-    extra: {
-      main_group: null,
-      budget_type: null,
-      budget_code: null,
-      budget_description: null,
-      remark: null,
-      purchaser_section: null,
+      site: "สำนักงานใหญ่",
     },
   };
 }

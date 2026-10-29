@@ -3,6 +3,7 @@ export interface Employee {
   full_name: string;
   position: string | null;
   department: string | null;
+  site: string | null;
   approval_level_id: string | null;
   passcode_hash: string; //Can not be sent in response
   signature_image: string | null;
