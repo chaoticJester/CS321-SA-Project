@@ -1,6 +1,6 @@
 import type { Requisition } from '../../model'
 
-export type RequesterView = 'dashboard' | 'requisition' | 'active' | 'requests' | 'history' | 'detail' | 'notifications'
+export type RequesterView = 'dashboard' | 'requisition' | 'active' | 'requests' | 'history' | 'detail' | 'edit' | 'notifications'
 
 export type PageActions = {
   onHome: () => void

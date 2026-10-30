@@ -1,6 +1,6 @@
 import { useState, type CSSProperties } from 'react'
-import { Check, Clock, X } from 'lucide-react'
-import { downloadPrPdf, getSession } from '../../../api'
+import { Check, Clock, Pencil, X } from 'lucide-react'
+import { downloadPrPdf, getPr, getSession } from '../../../api'
 import type { Requisition } from '../../../model'
 import { PrintableRequisition } from '../components/Review'
 import { RequesterHeader } from '../components/RequesterHeader'
@@ -13,7 +13,7 @@ const formatApprovedAt = (value: string) => {
   return `${date.toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: 'numeric' })} · ${date.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' })}`
 }
 
-export function RequestDetailPage({ request, ...props }: PageActions & { request: Requisition }) {
+export function RequestDetailPage({ request, onEdit, ...props }: PageActions & { request: Requisition; onEdit: (request: Requisition) => void }) {
   const employee = request.requester || getSession()?.employee
   const approval = request.approval?.chain || []
   const approvedCount = approval.filter(step => step.status === 'approved').length
@@ -33,6 +33,22 @@ export function RequestDetailPage({ request, ...props }: PageActions & { request
       setDownloading(false)
     }
   }
+  // Only the requester can resubmit, and only after the PR was rejected.
+  const canEdit = request.status === 'rejected' && Boolean(request.backendId) && (!request.requester || request.requester.employee_id === getSession()?.employee.employee_id)
+  const rejectedStep = approval.find(step => step.status === 'rejected')
+  const [opening, setOpening] = useState(false)
+  const edit = async () => {
+    if (!request.backendId) return
+    setOpening(true)
+    setDownloadError('')
+    try {
+      // The list passes summaries without items or attachments, so load the full PR first.
+      onEdit(await getPr(request.backendId))
+    } catch (error) {
+      setDownloadError(error instanceof Error ? error.message : 'ไม่สามารถโหลดคำขอเพื่อแก้ไขได้')
+      setOpening(false)
+    }
+  }
   const openAttachment = (file: File) => {
     const url = URL.createObjectURL(file)
     window.open(url, '_blank', 'noopener,noreferrer')
@@ -43,10 +59,10 @@ export function RequestDetailPage({ request, ...props }: PageActions & { request
     <RequesterHeader active="requests" {...props} />
     <main className="mx-auto w-[min(1216px,calc(100%_-_48px))] pb-24 pt-11 max-[760px]:w-[calc(100%_-_32px)]">
       <button className="border-0 bg-transparent p-0 text-sm text-[#888]" type="button" onClick={props.onMyRequests}>คำขอของฉัน　/　{request.reference}</button>
-      <div className="mt-3 flex flex-wrap items-start justify-between gap-4"><div><h1 className="text-[28px] font-semibold text-[#31456c]">{request.reference || 'PR-DRAFT'}</h1><p className="text-base text-[#888]">{request.basic.job || 'Purchase Requisition'}</p></div><div className="flex gap-3"><span key={request.status} className="request-status-badge inline-flex h-[29px] items-center gap-1.5 rounded-lg bg-[#e7ebef] px-3 text-sm text-[#5e6669]">{request.status === 'approved' ? <Check size={14} aria-hidden="true" /> : request.status === 'rejected' ? <X size={14} aria-hidden="true" /> : <Clock size={14} aria-hidden="true" />}{statusLabel}</span><button className="request-download h-[29px] rounded-lg border border-[#8884] bg-white px-4 text-sm" type="button" disabled={downloading} onClick={() => void download()}>{downloading ? 'กำลังดาวน์โหลด…' : 'ดาวน์โหลด PR'}</button></div></div>
+      <div className="mt-3 flex flex-wrap items-start justify-between gap-4"><div><h1 className="text-[28px] font-semibold text-[#31456c]">{request.reference || 'PR-DRAFT'}</h1><p className="text-base text-[#888]">{request.basic.job || 'Purchase Requisition'}</p></div><div className="flex gap-3"><span key={request.status} className="request-status-badge inline-flex h-[29px] items-center gap-1.5 rounded-lg bg-[#e7ebef] px-3 text-sm text-[#5e6669]">{request.status === 'approved' ? <Check size={14} aria-hidden="true" /> : request.status === 'rejected' ? <X size={14} aria-hidden="true" /> : <Clock size={14} aria-hidden="true" />}{statusLabel}</span>{canEdit ? <button className="request-edit inline-flex h-[29px] items-center gap-1.5 rounded-lg border-0 bg-[#4f6fae] px-4 text-sm text-white disabled:opacity-60" type="button" disabled={opening} onClick={() => void edit()}><Pencil size={14} aria-hidden="true" />{opening ? 'กำลังเปิด…' : 'แก้ไขรายละเอียด'}</button> : null}<button className="request-download h-[29px] rounded-lg border border-[#8884] bg-white px-4 text-sm" type="button" disabled={downloading} onClick={() => void download()}>{downloading ? 'กำลังดาวน์โหลด…' : 'ดาวน์โหลด PR'}</button></div></div>
       {downloadError ? <p className="form-error mt-3" role="alert">{downloadError}</p> : null}
       <section className="approval-status-card mt-6" aria-labelledby="approval-title"><div className="flex items-center justify-between gap-4"><h2 id="approval-title">สถานะการอนุมัติ</h2><span className="approval-status-count">อนุมัติแล้ว {approvedCount} จาก {approval.length} ลำดับ</span></div><ol className="approval-chain">{approval.map((step, index) => <li key={`${step.sequence_order}-${step.approver_id}`} style={{ '--i': index } as CSSProperties}><div className="approval-step-content"><span className={`approval-step-circle ${step.status === 'approved' ? 'is-complete' : step.status === 'rejected' ? 'is-rejected' : step === currentStep ? 'is-current' : ''}`}>{step.status === 'approved' ? <Check size={18} strokeWidth={2.25} aria-label="อนุมัติแล้ว" /> : step.status === 'rejected' ? <X size={17} strokeWidth={1.75} aria-label="ปฏิเสธ" /> : index + 1}</span><span className="approval-step-text"><strong>{step.approver_name}</strong><small className="approval-step-level">{step.level_name}</small><small className={`approval-step-status ${step.status === 'rejected' ? 'is-rejected' : step === currentStep ? 'is-current' : ''}`}>{step.status === 'approved' ? 'อนุมัติแล้ว' : step.status === 'rejected' ? 'ปฏิเสธ' : step === currentStep ? 'รออนุมัติ' : 'รอลำดับ'}</small>{step.approved_at ? <small className="approval-step-status">{formatApprovedAt(step.approved_at)}</small> : null}</span></div><span className="approval-step-connector" aria-hidden="true" /></li>)}</ol></section>
-      <div className="mt-4 grid grid-cols-[minmax(0,1fr)_310px] gap-7 max-[850px]:grid-cols-1"><RequestSummary request={request} employee={employee} /><aside className="space-y-5"><section className="rounded-lg border-2 border-[#8885] p-5"><h2 className="text-[22px] font-semibold text-[#4f6fae]">เอกสารแนบ</h2><div className="mt-4 space-y-2">{request.attachments.length ? request.attachments.map(attachment => <div className="request-attachment flex items-center justify-between gap-3 rounded-md border-2 border-[#8885] p-3 text-sm" key={attachment.id}><div className="min-w-0"><strong className="block truncate">{attachment.file.name}</strong><small className="text-[#888]">{Math.ceil(attachment.file.size / 1024)} KB</small></div><button className="border-0 bg-transparent text-[#4f6fae]" type="button" onClick={() => openAttachment(attachment.file)}>เปิดดู</button></div>) : <p className="rounded-md border border-dashed border-[#8885] p-5 text-center text-sm text-[#888]">ไม่มีเอกสารแนบ</p>}</div></section>{currentStep ? <div className="request-waiting-card rounded-lg bg-[#e7ebef] p-5 text-sm text-[#17414d]"><strong className="flex items-center gap-3"><Clock size={16} aria-hidden="true" />รอ {currentStep.level_name} ตรวจสอบ</strong><small className="mt-1 block pl-7">{currentStep.approver_name}</small></div> : null}</aside></div>
+      <div className="mt-4 grid grid-cols-[minmax(0,1fr)_310px] gap-7 max-[850px]:grid-cols-1"><RequestSummary request={request} employee={employee} /><aside className="space-y-5"><section className="rounded-lg border-2 border-[#8885] p-5"><h2 className="text-[22px] font-semibold text-[#4f6fae]">เอกสารแนบ</h2><div className="mt-4 space-y-2">{request.attachments.length ? request.attachments.map(attachment => <div className="request-attachment flex items-center justify-between gap-3 rounded-md border-2 border-[#8885] p-3 text-sm" key={attachment.id}><div className="min-w-0"><strong className="block truncate">{attachment.file.name}</strong><small className="text-[#888]">{Math.ceil(attachment.file.size / 1024)} KB</small></div><button className="border-0 bg-transparent text-[#4f6fae]" type="button" onClick={() => openAttachment(attachment.file)}>เปิดดู</button></div>) : <p className="rounded-md border border-dashed border-[#8885] p-5 text-center text-sm text-[#888]">ไม่มีเอกสารแนบ</p>}</div></section>{currentStep ? <div className="request-waiting-card rounded-lg bg-[#e7ebef] p-5 text-sm text-[#17414d]"><strong className="flex items-center gap-3"><Clock size={16} aria-hidden="true" />รอ {currentStep.level_name} ตรวจสอบ</strong><small className="mt-1 block pl-7">{currentStep.approver_name}</small></div> : null}{rejectedStep ? <div className="request-rejected-card rounded-lg bg-[#fbeaea] p-5 text-sm text-[#7a2424]"><strong className="flex items-center gap-3"><X size={16} aria-hidden="true" />ถูกปฏิเสธโดย {rejectedStep.level_name}</strong><small className="mt-1 block pl-7">{rejectedStep.approver_name}</small>{rejectedStep.comment ? <p className="mt-2 pl-7">เหตุผล: {rejectedStep.comment}</p> : null}{canEdit ? <p className="mt-2 pl-7 text-[#5e6669]">กด “แก้ไขรายละเอียด” เพื่อแก้ไขและส่งคำขออีกครั้ง</p> : null}</div> : null}</aside></div>
     </main>
   </div><div className="print-only"><PrintableRequisition value={request} /></div></>
 }

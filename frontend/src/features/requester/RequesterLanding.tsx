@@ -20,6 +20,7 @@ type RequesterLandingProps = {
 export function RequesterLanding({ employee, onSignOut }: RequesterLandingProps) {
   const [view, setView] = useState<RequesterView>('dashboard')
   const [selectedRequest, setSelectedRequest] = useState<Requisition | null>(null)
+  const [editingRequest, setEditingRequest] = useState<Requisition | null>(null)
   const [requestVersion, setRequestVersion] = useState(0)
   const [requestList, setRequestList] = useState<RequestListState>({ requests: [], loading: true, error: '' })
   const showingList = ['active', 'requests', 'history'].includes(view)
@@ -36,6 +37,10 @@ export function RequesterLanding({ employee, onSignOut }: RequesterLandingProps)
     setSelectedRequest(request)
     setView('detail')
   }
+  const openEdit = (request: Requisition) => {
+    setEditingRequest(request)
+    setView('edit')
+  }
   const actions: PageActions = {
     onHome: () => setView('dashboard'),
     onActiveRequests: () => setView('active'),
@@ -49,9 +54,10 @@ export function RequesterLanding({ employee, onSignOut }: RequesterLandingProps)
 
   const content = view === 'requisition'
     ? <PurchaseRequisitionPage employee={employee} onClose={actions.onHome} onSignOut={onSignOut} onSubmitted={() => setRequestVersion(version => version + 1)} onViewRequests={actions.onMyRequests} onTrackRequest={openDetail} onNotifications={actions.onNotifications} />
+    : view === 'edit' && editingRequest ? <PurchaseRequisitionPage key={editingRequest.backendId} employee={employee} editing={editingRequest} onClose={() => setView(selectedRequest ? 'detail' : 'requests')} onSignOut={onSignOut} onSubmitted={saved => { setSelectedRequest(saved); setRequestVersion(version => version + 1) }} onViewRequests={actions.onMyRequests} onTrackRequest={openDetail} onNotifications={actions.onNotifications} />
     : view === 'active' || view === 'requests' ? <MyRequestsPage key={view} {...actions} initialTab={view === 'active' ? 'active' : 'all'} requestList={requestList} />
     : view === 'history' ? <RequestHistoryPage {...actions} requestList={requestList} />
-    : view === 'detail' && selectedRequest ? <RequestDetailPage {...actions} request={selectedRequest} />
+    : view === 'detail' && selectedRequest ? <RequestDetailPage {...actions} request={selectedRequest} onEdit={openEdit} />
     : view === 'notifications' ? <RequesterNotificationsPage {...actions} />
     : <RequesterDashboard onCreate={actions.onOpenDraft} onMyRequests={actions.onMyRequests} onSignOut={onSignOut} onNotifications={actions.onNotifications} />
 

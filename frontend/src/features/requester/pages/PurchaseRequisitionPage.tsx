@@ -3,7 +3,7 @@ import type { FormEvent } from 'react'
 import { activeItems, basicError, BUDGET, grandTotal, itemError, newRequisition, persistRequisition, readDraft } from '../../../model'
 import type { Requisition } from '../../../model'
 import { Icon } from '../../../components/Icon'
-import { createPr, reservePrNumber } from '../../../api'
+import { createPr, reservePrNumber, resubmitPr } from '../../../api'
 import type { Employee } from '../../../api'
 import { Attachments } from '../components/Attachments'
 import { BasicInfo } from '../components/BasicInfo'
@@ -18,26 +18,28 @@ const stepNodeIds = ['384:6213', '384:6385', '384:7471', '384:6925']
 function syncItemBudgetCodes(value: Requisition): Requisition {
   return { ...value, items: value.items.map(item => ({ ...item, budgetCode: value.basic.budgetCode })) }
 }
-export function PurchaseRequisitionPage({ employee, onClose, onSignOut, onSubmitted, onViewRequests, onTrackRequest, onNotifications }: { employee: Employee; onClose: () => void; onSignOut: () => void; onSubmitted: (value: Requisition) => void; onViewRequests: () => void; onTrackRequest: (value: Requisition) => void; onNotifications: () => void }) {
-  const [value, setValue] = useState<Requisition>(newRequisition)
-  const [ready, setReady] = useState(false)
+// With `editing`, the form edits a rejected PR and sends it back with the resubmit API.
+export function PurchaseRequisitionPage({ employee, editing, onClose, onSignOut, onSubmitted, onViewRequests, onTrackRequest, onNotifications }: { employee: Employee; editing?: Requisition; onClose: () => void; onSignOut: () => void; onSubmitted: (value: Requisition) => void; onViewRequests: () => void; onTrackRequest: (value: Requisition) => void; onNotifications: () => void }) {
+  const [value, setValue] = useState<Requisition>(() => editing ? syncItemBudgetCodes({ ...editing, step: 1 }) : newRequisition())
+  const [ready, setReady] = useState(Boolean(editing))
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
   const [busy, setBusy] = useState(false)
   const [dirty, setDirty] = useState(false)
   const [modal, setModal] = useState<'pdf' | 'success' | null>(null)
   useEffect(() => {
+    if (editing) return
     let mounted = true
     readDraft().then(draft => { if (mounted && draft) { setValue(syncItemBudgetCodes(draft)); setNotice('Saved draft restored / โหลดฉบับร่างแล้ว') } }).catch(() => { if (mounted) setNotice('Browser storage is unavailable. You can complete the form, but draft saving may fail.') }).finally(() => { if (mounted) setReady(true) })
     return () => { mounted = false }
-  }, [])
+  }, [editing])
   // Reserve the PR number once so the form can show it; a restored draft keeps its reservation.
   useEffect(() => {
-    if (!ready || value.reservationId) return
+    if (!ready || editing || value.reservationId) return
     let mounted = true
     reservePrNumber().then(({ reservation_id, pr_no }) => { if (mounted) setValue(current => current.reservationId ? current : { ...current, reservationId: reservation_id, reference: pr_no }) }).catch(() => {})
     return () => { mounted = false }
-  }, [ready, value.reservationId])
+  }, [ready, editing, value.reservationId])
   useEffect(() => {
     if (!dirty) return
     const handler = (e: BeforeUnloadEvent) => { e.preventDefault(); e.returnValue = '' }
@@ -69,6 +71,11 @@ export function PurchaseRequisitionPage({ employee, onClose, onSignOut, onSubmit
     setBusy(true); setError('')
     const submitted = { ...value, items: activeItems(value.items) }
     try {
+      if (editing) {
+        const saved = syncItemBudgetCodes(await resubmitPr(submitted, editing.attachments.map(attachment => attachment.id)))
+        setValue(saved); setDirty(false); onSubmitted(saved); setModal('success')
+        return
+      }
       const saved = syncItemBudgetCodes(await createPr(submitted))
       await persistRequisition(saved, true)
       setValue(saved); setDirty(false); onSubmitted(saved); setModal('success')
@@ -77,7 +84,7 @@ export function PurchaseRequisitionPage({ employee, onClose, onSignOut, onSubmit
     finally { setBusy(false) }
   }
   if (!ready) return <main className="loading-page" role="status">Loading your requisition…</main>
-  return <><div className="min-h-svh bg-white"><RequesterHeader onNotifications={onNotifications} onHome={onClose} onMyRequests={onViewRequests} onSignOut={onSignOut} /><main className="pr-page" data-node-id={stepNodeIds[value.step - 1]}><header className="pr-header"><div className="pr-heading"><div><h1>Create Purchase Requisition (PR)</h1><p>สร้างใบขอสั่งซื้อ (PR)</p></div><div className="header-actions"><button className="button cancel" type="button" disabled={busy} onClick={onClose}>Cancel</button><button className="button save" type="button" disabled={busy} onClick={save}><Icon name="save" />{busy ? 'Saving…' : 'Save Draft'}</button></div></div>
+  return <><div className="min-h-svh bg-white"><RequesterHeader onNotifications={onNotifications} onHome={onClose} onMyRequests={onViewRequests} onSignOut={onSignOut} /><main className="pr-page" data-node-id={stepNodeIds[value.step - 1]}><header className="pr-header"><div className="pr-heading"><div><h1>{editing ? 'Edit Purchase Requisition (PR)' : 'Create Purchase Requisition (PR)'}</h1><p>{editing ? 'แก้ไขใบขอสั่งซื้อ (PR) แล้วส่งใหม่' : 'สร้างใบขอสั่งซื้อ (PR)'}</p></div><div className="header-actions"><button className="button cancel" type="button" disabled={busy} onClick={onClose}>Cancel</button>{editing ? null : <button className="button save" type="button" disabled={busy} onClick={save}><Icon name="save" />{busy ? 'Saving…' : 'Save Draft'}</button>}</div></div>
     <dl className="requester-meta"><div><dt>Name/ชื่อ :</dt><dd>{employee.full_name}</dd></div><div><dt>PR No./เลขที่ :</dt><dd>{value.reference || '—'}</dd></div><div><dt>Site/สาขา :</dt><dd>Head Office</dd></div><div><dt>Position/ตำแหน่ง :</dt><dd>{employee.position || 'Requester'}</dd></div><div><dt>PR Date/วันที่ :</dt><dd>{new Date(value.createdAt).toLocaleDateString('en-GB')}</dd></div><div><dt>Section/แผนก :</dt><dd>{employee.department || '—'}</dd></div></dl>
   </header><nav aria-label="Purchase requisition steps"><ol className="stepper">{steps.map(([en, th], index) => <li key={en} className={index + 1 === value.step ? 'current' : ''}><button type="button" disabled={index + 1 > value.step || busy} aria-current={index + 1 === value.step ? 'step' : undefined} onClick={() => move(index + 1)}><span className="step-number">{index + 1}</span><span>{en}<small>{th}</small></span></button></li>)}</ol></nav>
     {notice && <div className="notice" role="status">{notice}<button type="button" className="text-button" aria-label="Dismiss notification" onClick={() => setNotice('')}>Dismiss</button></div>}
@@ -87,16 +94,16 @@ export function PurchaseRequisitionPage({ employee, onClose, onSignOut, onSubmit
       {value.step === 1 && <BasicInfo value={value.basic} onChange={basic => update({ basic })} />}
       {value.step === 2 && <Items items={value.items} onChange={items => update({ items })} remark={value.remark} onRemark={remark => update({ remark })} onError={setError} />}
       {value.step === 3 && <Attachments attachments={value.attachments} purchaser={value.purchaser} onAttachments={attachments => update({ attachments })} onPurchaser={purchaser => update({ purchaser })} onError={setError} />}
-      {value.step === 4 && <Review value={value} onRemark={remark => update({ remark })} onBack={() => move(3)} onSubmit={submit} onPreview={() => setModal('pdf')} busy={busy} />}
+      {value.step === 4 && <Review value={value} onRemark={remark => update({ remark })} onBack={() => move(3)} onSubmit={submit} onPreview={() => setModal('pdf')} busy={busy} resubmit={Boolean(editing)} />}
       {value.step < 4 && <div className="step-actions">{value.step > 1 && <button type="button" className="button secondary" onClick={() => move(value.step - 1)}>Back</button>}<button className="button primary" type="submit">Next</button></div>}
       </fieldset>
     </form>
   </main></div>
   <div className="print-only"><PrintableRequisition value={value} /></div>
   {modal === 'pdf' && <PdfPreview value={value} draft onClose={() => setModal(null)} />}
-  {modal === 'success' && <DesignDialog title="ส่งคำขอสำเร็จ" className="submission-dialog" onClose={onViewRequests}>
+  {modal === 'success' && <DesignDialog title={editing ? 'ส่งคำขออีกครั้งสำเร็จ' : 'ส่งคำขอสำเร็จ'} className="submission-dialog" onClose={onViewRequests}>
     <img className="submission-check" src={`${import.meta.env.BASE_URL}figma/submission-check.svg`} width="55" height="55" alt="" />
-    <h2>ส่งคำขอสำเร็จ</h2><p>คำขอของคุณเข้าสู่กระบวนการอนุมัติแล้ว</p>
+    <h2>{editing ? 'ส่งคำขออีกครั้งสำเร็จ' : 'ส่งคำขอสำเร็จ'}</h2><p>{editing ? 'คำขอที่แก้ไขแล้วเข้าสู่กระบวนการอนุมัติรอบใหม่' : 'คำขอของคุณเข้าสู่กระบวนการอนุมัติแล้ว'}</p>
     <dl><div><dt>เลขที่ใบขอสั่งซื้อ</dt><dd>{value.reference}</dd></div><div><dt>ส่งเมื่อ</dt><dd>{new Date(value.createdAt).toLocaleString('th-TH', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</dd></div><div><dt>สถานะ</dt><dd><span className="rounded-lg bg-[#e7ebef] px-3 py-1 text-sm text-[#17414d]">◷ รออนุมัติ</span></dd></div></dl>
     <small>ผู้รับผิดชอบลำดับถัดไป</small><p className="next-approver">{value.approval?.chain.find(step => step.status === 'pending')?.approver_name || '—'}</p><small>{value.approval?.chain.find(step => step.status === 'pending')?.level_name} · {value.approval?.chain.find(step => step.status === 'pending')?.department}</small>
     <div className="submission-actions"><button className="button secondary" type="button" onClick={onViewRequests}>← กลับคำขอของฉัน</button><button className="button primary" type="button" onClick={() => onTrackRequest(value)}>→ ติดตามคำขอ</button></div>

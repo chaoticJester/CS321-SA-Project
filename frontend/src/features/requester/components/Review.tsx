@@ -3,7 +3,7 @@ import type { Requisition } from '../../../model'
 import { Icon } from '../../../components/Icon'
 import { getSession } from '../../../api'
 
-export function Review({ value, onRemark, onBack, onSubmit, onPreview, busy }: { value: Requisition; onRemark: (text: string) => void; onBack: () => void; onSubmit: () => void; onPreview: () => void; busy: boolean }) {
+export function Review({ value, onRemark, onBack, onSubmit, onPreview, busy, resubmit = false }: { value: Requisition; onRemark: (text: string) => void; onBack: () => void; onSubmit: () => void; onPreview: () => void; busy: boolean; resubmit?: boolean }) {
   const total = grandTotal(value.items), remaining = BUDGET - total
   return <div className="review-grid"><section className="budget-panel bordered-panel"><table className="budget-table"><caption>Budget Control Sheet</caption><tbody>
     <tr><th>Budget Type</th><td colSpan={3}>{value.basic.budgetType}</td></tr><tr><th>Budget Year</th><td colSpan={3} className="number">{new Date(value.createdAt).getFullYear()}</td></tr><tr><th>Budget Status</th><td colSpan={3} className="number">{remaining >= 0 ? 'ON BUDGET' : 'OVER BUDGET'}</td></tr><tr><th>Cost Center</th><td colSpan={3} className="number">TECHNOLOGY DEVELOPMENT</td></tr>
@@ -17,7 +17,7 @@ export function Review({ value, onRemark, onBack, onSubmit, onPreview, busy }: {
     <dl className="pr-summary"><div><dt>PR No.</dt><dd>{value.reference || '-'}</dd></div><div><dt>Require Date</dt><dd>{value.basic.requiredDate.split('-').reverse().join('/')}</dd></div><div><dt>Department</dt><dd>{getSession()?.employee.department || '—'}</dd></div><div><dt>Cost Center</dt><dd>26-23-ADM-088</dd></div><div><dt>Requester</dt><dd>{getSession()?.employee.full_name || '—'}</dd></div></dl>
     <div className="tip"><strong>ⓘ Tip / คำแนะนำ</strong><p>กรุณาตรวจสอบรายการสินค้าและเอกสารแนบให้ครบถ้วน ก่อนกด Submit</p></div>
 
-  </section><div className="step-actions"><button type="button" className="button secondary" onClick={onBack}>Back</button><button type="button" className="button primary" disabled={busy} onClick={onSubmit}><Icon name="send" />{busy ? 'Submitting…' : 'Submit'}</button></div><button type="button" className="button pdf-button" onClick={onPreview}><Icon name="file" />View PDF</button></div></div>
+  </section><div className="step-actions"><button type="button" className="button secondary" onClick={onBack}>Back</button><button type="button" className="button primary" disabled={busy} onClick={onSubmit}><Icon name="send" />{resubmit ? (busy ? 'Resubmitting…' : 'Resubmit') : (busy ? 'Submitting…' : 'Submit')}</button></div><button type="button" className="button pdf-button" onClick={onPreview}><Icon name="file" />View PDF</button></div></div>
 }
 
 export function PrintableRequisition({ value }: { value: Requisition }) {

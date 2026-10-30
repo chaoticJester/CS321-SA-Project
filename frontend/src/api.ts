@@ -298,6 +298,23 @@ export async function createPr(value: Requisition): Promise<Requisition> {
   return { ...saved, basic: { ...saved.basic, budgetCode: value.basic.budgetCode, mainGroup: value.basic.mainGroup, line: value.basic.line, description: value.basic.description }, attachments: value.attachments, attachmentInfo: value.attachmentInfo, remark: value.remark }
 }
 
+// Sends a rejected PR again with corrected details; the server starts a new approval round.
+// Attachments already on the server stay there, so only newly added files are uploaded.
+export async function resubmitPr(value: Requisition, existingAttachmentIds: string[]): Promise<Requisition> {
+  const prId = value.backendId
+  if (!prId) throw new Error('ไม่พบคำขอที่จะส่งใหม่')
+  await request(`/pr/${encodeURIComponent(prId)}/resubmit`, { method: 'POST', body: JSON.stringify(toPrBody(value)) })
+
+  for (const attachment of value.attachments.filter(attachment => !existingAttachmentIds.includes(attachment.id))) {
+    const form = new FormData()
+    form.append('file', attachment.file)
+    await request(`/pr/${encodeURIComponent(prId)}/attachments`, { method: 'POST', body: form })
+  }
+
+  const saved = await getPr(prId)
+  return { ...saved, basic: { ...saved.basic, budgetCode: value.basic.budgetCode, mainGroup: value.basic.mainGroup, line: value.basic.line, description: value.basic.description }, attachmentInfo: value.attachmentInfo, remark: value.remark }
+}
+
 export function getPendingApprovals(employeeId: string) {
   return request<PendingApproval[]>(`/employees/${encodeURIComponent(employeeId)}/pending-approvals`)
 }
